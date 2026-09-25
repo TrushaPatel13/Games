@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Copyright (c) 2026 Trusha Patel (FrozenWizard). All rights reserved. See LICENSE. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -74,7 +75,7 @@
   .stage {
     position: relative;
     width: var(--game-w);
-    min-height: min(520px, calc(100dvh - 110px));
+    min-height: min(520px, calc(100dvh - 132px));
     background: var(--court);
     border: 2px solid var(--line);
     border-radius: 6px;
@@ -154,6 +155,7 @@
 
   @media (max-width: 560px) { .keys { display: none; } .scene { padding: 16px 14px; } h2 { font-size: 18px; } }
   @media (prefers-reduced-motion: reduce) { .choices button { transition: none; } }
+  .copy { color: var(--muted); font-size: 11px; margin: 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -171,6 +173,8 @@
   <div class="hud"><span id="endingsCount">ENDINGS 0/6</span><span class="items" id="items"></span></div>
   <section class="scene" id="scene" aria-live="polite"></section>
 </main>
+
+<p class="copy">© 2026 FrozenWizard · Trusha Patel. All rights reserved.</p>
 
 <script>
 /* =====================================================================

@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Copyright (c) 2026 Trusha Patel (FrozenWizard). All rights reserved. See LICENSE. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -66,7 +67,7 @@
     padding: 0 4px;
     color: var(--ink);
   }
-  :root { --game-w: min(520px, calc((100dvh - 110px) * 0.8), 100%); }
+  :root { --game-w: min(520px, calc((100dvh - 132px) * 0.8), 100%); }
   canvas {
     display: block;
     width: var(--game-w);
@@ -80,6 +81,7 @@
   }
   canvas:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; }
   @media (max-width: 440px) { .keys { display: none; } }
+  .copy { color: var(--muted); font-size: 11px; margin: 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -92,6 +94,8 @@
   <div class="keys"><kbd>←</kbd> <kbd>→</kbd> or mouse · <kbd>Space</kbd> launch / pause · <kbd>M</kbd> sound</div>
 </header>
 <canvas id="game" tabindex="0" aria-label="Breakout game. Use arrow keys or the mouse to move the paddle, Space to launch the ball."></canvas>
+
+<p class="copy">© 2026 FrozenWizard · Trusha Patel. All rights reserved.</p>
 
 <script>
 /* =====================================================================

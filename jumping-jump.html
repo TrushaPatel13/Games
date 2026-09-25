@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Copyright (c) 2026 Trusha Patel (FrozenWizard). All rights reserved. See LICENSE. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -67,7 +68,7 @@
     padding: 0 4px;
     color: var(--ink);
   }
-  :root { --game-w: min(800px, calc((100dvh - 110px) * 16 / 9), 100%); }
+  :root { --game-w: min(800px, calc((100dvh - 132px) * 16 / 9), 100%); }
   canvas {
     display: block;
     width: var(--game-w);
@@ -80,6 +81,7 @@
   }
   canvas:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; }
   @media (max-width: 560px) { .keys { display: none; } }
+  .copy { color: var(--muted); font-size: 11px; margin: 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -92,6 +94,8 @@
   <div class="keys"><kbd>Space</kbd> / <kbd>↑</kbd> jump · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>↓</kbd> drop fast · <kbd>P</kbd> pause · <kbd>M</kbd> sound</div>
 </header>
 <canvas id="game" tabindex="0" aria-label="Endless platform game. Space or Up to jump, Left and Right to move, Down to drop faster. Don't fall into the holes."></canvas>
+
+<p class="copy">© 2026 FrozenWizard · Trusha Patel. All rights reserved.</p>
 
 <script>
 /* =====================================================================
