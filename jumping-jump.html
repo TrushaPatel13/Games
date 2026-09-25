@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jumping Jump</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  /* FrozenWizard theme: shared by every FW game. One dark look, colors set explicitly. */
+  :root {
+    color-scheme: dark;
+    --bg: #1a1240;         /* indigo */
+    --court: #231a52;
+    --line: #3a2d78;
+    --ink: #eaf6ff;        /* ice white */
+    --muted: #a59cd0;
+    --violet: #b48cff;
+    --purple: #7c4ddb;
+    --blueviolet: #7a6cf0;
+    --frost: #8fd3ff;
+    --rose: #ff6fa8;       /* danger / game over */
+    --gold: #ffd66e;       /* bouncy blocks */
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    padding: 12px 16px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  header {
+    width: 100%;
+    max-width: var(--game-w);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h1 {
+    font: 700 22px/1 "Silkscreen", "IBM Plex Mono", monospace;
+    letter-spacing: 0.04em;
+    margin: 0;
+    color: var(--frost);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 40px; height: 40px; image-rendering: pixelated; }
+  .studio {
+    display: block;
+    font: 700 11px/1 "Silkscreen", "IBM Plex Mono", monospace;
+    letter-spacing: 0.08em;
+    color: var(--frost);
+    margin-bottom: 4px;
+  }
+  .studio span { color: var(--violet); }
+  .keys { color: var(--muted); font-size: 12px; text-align: right; }
+  kbd {
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0 4px;
+    color: var(--ink);
+  }
+  :root { --game-w: min(800px, calc((100dvh - 110px) * 16 / 9), 100%); }
+  canvas {
+    display: block;
+    width: var(--game-w);
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
+    background: var(--court);
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    touch-action: none;
+  }
+  canvas:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; }
+  @media (max-width: 560px) { .keys { display: none; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img class="logo" src="brand/frozenwizard-logo.svg" alt="FrozenWizard logo">
+    <div><span class="studio">FROZEN<span>WIZARD</span></span><h1>Jumping Jump</h1></div>
+  </div>
+  <div class="keys"><kbd>Space</kbd> / <kbd>↑</kbd> jump · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>↓</kbd> drop fast · <kbd>P</kbd> pause · <kbd>M</kbd> sound</div>
+</header>
+<canvas id="game" tabindex="0" aria-label="Endless platform game. Space or Up to jump, Left and Right to move, Down to drop faster. Don't fall into the holes."></canvas>
+
+<script>
+/* =====================================================================
+   JUMPING JUMP: an endless auto-scrolling platformer.
+   Ice blocks slide in from the right; the wizard hops from block to block.
+   Everything runs in a fixed 640x360 "world"; the canvas is scaled to fit.
+   ===================================================================== */
+const W = 640, H = 360;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COLORS = { court: css('--court'), line: css('--line'), ink: css('--ink'), muted: css('--muted'),
+                 violet: css('--violet'), purple: css('--purple'), blueviolet: css('--blueviolet'),
+                 frost: css('--frost'), rose: css('--rose'), gold: css('--gold') };
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;    // keep the pixel wizard crisp
+}
+resize();
+addEventListener('resize', resize);
+
+/* ---------------------------------------------------------------------
+   STEP 1: INPUT. Held keys are polled each frame; jump presses are
+   buffered briefly so a press just before landing still counts.
+   --------------------------------------------------------------------- */
+const keys = {};
+const JUMP_KEYS = [' ', 'ArrowUp', 'w', 'W'];
+
+addEventListener('keydown', e => {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
+  const wasDown = keys[e.key];
+  keys[e.key] = true;
+  if (wasDown) return;                  // ignore key auto-repeat
+  if (JUMP_KEYS.includes(e.key)) onAction();
+  if (e.key === 'm' || e.key === 'M') sound.muted = !sound.muted;
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause();
+});
+addEventListener('keyup', e => {
+  keys[e.key] = false;
+  if (JUMP_KEYS.includes(e.key)) cutJump();
+});
+canvas.addEventListener('pointerdown', () => { canvas.focus(); onAction(); });
+canvas.addEventListener('pointerup', cutJump);
+
+const held = (...ks) => ks.some(k => keys[k]);
+
+/* ---------------------------------------------------------------------
+   STEP 2: THE WIZARD. Lives in screen space; the world scrolls past him.
+   (x, y) is the point between his feet.
+   --------------------------------------------------------------------- */
+const GRAVITY = 1500, FAST_FALL = 1800, JUMP_V = 560, AIR_JUMP_V = 480;
+const RUN = 250, COYOTE = 0.1, BUFFER = 0.12;
+const player = { x: 140, y: 0, vx: 0, vy: 0, w: 22, h: 38, ground: null, face: 1,
+                 coyote: 0, buffer: 0, airJumps: 1, squash: 0 };
+
+function resetPlayer() {
+  Object.assign(player, { x: 140, y: platforms[0].y, vx: 0, vy: 0, ground: platforms[0], face: 1,
+                          coyote: 0, buffer: 0, airJumps: 1, squash: 0 });
+}
+
+function tryJump() {
+  if (player.ground || player.coyote > 0) {
+    player.vy = -JUMP_V;
+    sound.play(520, 0.08);
+  } else if (player.airJumps > 0) {     // one magic frost jump in the air
+    player.airJumps--;
+    player.vy = -AIR_JUMP_V;
+    burst(player.x, player.y, COLORS.frost, 10);
+    sound.play(780, 0.1, 'triangle');
+  } else return false;
+  player.ground = null; player.coyote = 0; player.buffer = 0;
+  return true;
+}
+function cutJump() {                    // let go early for a short hop
+  if (state === 'play' && player.vy < -220) player.vy *= 0.5;
+}
+
+function updatePlayer(dt) {
+  let dir = 0;
+  if (held('ArrowLeft', 'a', 'A')) dir -= 1;
+  if (held('ArrowRight', 'd', 'D')) dir += 1;
+  if (dir) player.face = dir;
+  player.vx += (dir * RUN - player.vx) * Math.min(1, dt * 14);   // quick but not instant
+  player.x = clamp(player.x + player.vx * dt, 14, W - 14);
+
+  if (player.buffer > 0) { player.buffer -= dt; if (tryJump()) player.buffer = 0; }
+
+  if (player.ground) {
+    const g = player.ground;
+    if (g.falling || player.x + player.w / 2 < g.x || player.x - player.w / 2 > g.x + g.w) {
+      player.ground = null; player.coyote = COYOTE;          // walked off the edge
+    } else {
+      player.y = g.y;                   // ride moving blocks
+      if (g.type === 'crumble' && g.timer === undefined) g.timer = 0.45;
+      return;
+    }
+  }
+
+  player.coyote -= dt;
+  const fastFall = held('ArrowDown', 's', 'S') && player.vy > -100;
+  player.vy += (GRAVITY + (fastFall ? FAST_FALL : 0)) * dt;
+  const prevY = player.y;
+  player.y += player.vy * dt;
+
+  if (player.vy >= 0) landOnPlatforms(prevY);
+  if (player.y - player.h > H) die();
+}
+
+/* ---------------------------------------------------------------------
+   STEP 3: LANDING. Blocks are one-way: you only collide coming down
+   onto the top edge, so you can jump up through them from below.
+   --------------------------------------------------------------------- */
+function landOnPlatforms(prevY) {
+  for (const p of platforms) {
+    if (p.falling) continue;
+    if (player.x + player.w / 2 < p.x || player.x - player.w / 2 > p.x + p.w) continue;
+    const prevTop = p.prevY ?? p.y;
+    if (prevY <= prevTop + 1 && player.y >= p.y) {
+      player.y = p.y;
+      player.airJumps = 1;
+      player.squash = 1;
+      if (p.type === 'bouncy') {
+        player.vy = -JUMP_V * 1.45;
+        p.squash = 1;
+        burst(player.x, p.y, COLORS.gold, 8);
+        sound.play(300, 0.15, 'triangle');
+        return;
+      }
+      player.vy = 0;
+      player.ground = p;
+      sound.play(180, 0.04);
+      if (player.buffer > 0) tryJump();
+      return;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   STEP 4: BLOCKS. Generated just off the right edge, each placed
+   relative to the last so every gap is always jumpable.
+   ice      plain solid block
+   crumble  cracks when you stand on it, then drops away
+   moving   bobs up and down
+   bouncy   springs you high into the air
+   --------------------------------------------------------------------- */
+const BASE_SPEED = 150, MAX_SPEED = 340, BLOCK_H = 16;
+const TOP_LIMIT = 130, BOTTOM_LIMIT = H - 40;
+let platforms = [], gems = [], speed = BASE_SPEED, distance = 0, time = 0;
+
+function difficulty() { return (speed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED); }   // 0..1
+
+function pickType() {
+  const d = difficulty(), r = Math.random();
+  if (distance < 800) return 'ice';     // a gentle start
+  if (r < 0.08) return 'bouncy';
+  if (r < 0.08 + 0.12 + d * 0.18) return 'crumble';
+  if (r < 0.2 + d * 0.18 + 0.1 + d * 0.15) return 'moving';
+  return 'ice';
+}
+
+function spawnPlatform(prev) {
+  const d = difficulty();
+  const type = pickType();
+  const rise = rand(-70, 60);                                // negative = higher
+  const y = clamp(prev.baseY + rise, TOP_LIMIT, BOTTOM_LIMIT);
+  const upBy = Math.max(0, prev.baseY - y);
+  const gap = rand(45, 70 + d * 90) * (1 - upBy / 200);      // big climbs get shorter gaps
+  const w = type === 'bouncy' ? 56 : rand(70, 190) * (1 - d * 0.35);
+  const p = { x: prev.x + prev.w + gap, y, baseY: y, w, type, phase: rand(0, 6.28), squash: 0 };
+  if (type === 'moving') p.amp = rand(18, 34);
+  platforms.push(p);
+
+  if (Math.random() < 0.35) {           // frost crystals to grab for bonus points
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) gems.push({ x: p.x + p.w / 2 + (i - (n - 1) / 2) * 24, y: y - 44, bob: rand(0, 6) });
+  } else if (gap > 90 && Math.random() < 0.4) {
+    gems.push({ x: prev.x + prev.w + gap / 2, y: Math.min(prev.baseY, y) - 70, bob: rand(0, 6) });
+  }
+}
+
+function buildWorld() {
+  platforms = [{ x: -20, y: H - 70, baseY: H - 70, w: 420, type: 'ice', squash: 0 }];
+  gems = [];
+  while (platforms.at(-1).x < W + 200) spawnPlatform(platforms.at(-1));
+}
+
+function updateWorld(dt) {
+  time += dt;
+  speed = Math.min(MAX_SPEED, BASE_SPEED + distance * 0.008);
+  const dx = speed * dt;
+  distance += dx;
+
+  for (const p of platforms) {
+    p.x -= dx;
+    p.prevY = p.y;
+    if (p.type === 'moving' && !p.falling) p.y = p.baseY + Math.sin(time * 1.8 + p.phase) * p.amp;
+    if (p.timer !== undefined && !p.falling) {
+      p.timer -= dt;
+      if (p.timer <= 0) { p.falling = true; p.vy = 0; sound.play(140, 0.12, 'sawtooth'); }
+    }
+    if (p.falling) { p.vy += GRAVITY * dt; p.y += p.vy * dt; }
+    p.squash = Math.max(0, p.squash - dt * 5);
+  }
+  platforms = platforms.filter(p => p.x + p.w > -40 && p.y < H + 60);
+  while (platforms.at(-1).x < W + 200) spawnPlatform(platforms.at(-1));
+
+  for (const g of gems) {
+    g.x -= dx;
+    if (!g.taken && Math.hypot(g.x - player.x, g.y - (player.y - player.h / 2)) < 24) {
+      g.taken = true; gemCount++;
+      burst(g.x, g.y, COLORS.frost, 8);
+      sound.play(990, 0.07, 'triangle');
+    }
+  }
+  gems = gems.filter(g => !g.taken && g.x > -20);
+}
+
+/* ---------------------------------------------------------------------
+   STEP 5: GAME STATE. Score is distance travelled plus crystals.
+   --------------------------------------------------------------------- */
+const HUD = 30, GEM_POINTS = 25;
+let gemCount = 0, best = 0;
+try { best = +localStorage.getItem('jumping-jump-best') || 0; } catch {}
+const score = () => Math.floor(distance / 10) + gemCount * GEM_POINTS;
+
+function die() {
+  shake = 8;
+  sound.play(110, 0.35, 'sawtooth');
+  saveBest();
+  setState('over');
+}
+function saveBest() {
+  if (score() > best) {
+    best = score();
+    try { localStorage.setItem('jumping-jump-best', String(best)); } catch {}
+  }
+}
+
+/* ---------------------------------------------------------------------
+   STEP 6: SCENES. title -> play <-> paused -> over -> play ...
+   --------------------------------------------------------------------- */
+let state = 'title';
+function setState(s) { state = s; }
+
+function newGame() {
+  distance = 0; time = 0; speed = BASE_SPEED; gemCount = 0; particles = [];
+  buildWorld(); resetPlayer(); setState('play');
+}
+function onAction() {                   // Space / Up / tap: jump in play, otherwise start or resume
+  sound.unlock();
+  if (state === 'title' || state === 'over') newGame();
+  else if (state === 'paused') setState('play');
+  else if (state === 'play' && !tryJump()) player.buffer = BUFFER;
+}
+function togglePause() {
+  if (state === 'play') setState('paused');
+  else if (state === 'paused') setState('play');
+}
+addEventListener('blur', () => { if (state === 'play') setState('paused'); });
+
+/* ---------------------------------------------------------------------
+   STEP 7: POLISH. Particles, snowfall, parallax hills, shake, sound.
+   --------------------------------------------------------------------- */
+let particles = [], shake = 0;
+const snow = Array.from({ length: reduceMotion ? 0 : 50 }, () => ({ x: rand(0, W), y: rand(0, H), r: rand(0.6, 1.8), v: rand(15, 40) }));
+
+function burst(x, y, color, n = 12) {
+  if (reduceMotion) n = Math.min(n, 4);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = 50 + Math.random() * 140;
+    particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.5, color });
+  }
+}
+function updateFx(dt, scrolling) {
+  for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 500 * dt; p.life -= dt; }
+  particles = particles.filter(p => p.life > 0);
+  for (const s of snow) {
+    s.y += s.v * dt; s.x -= (scrolling ? speed * 0.3 : 10) * dt;
+    if (s.y > H) s.y = HUD; if (s.x < 0) s.x += W;
+  }
+  shake = Math.max(0, shake - dt * 30);
+  player.squash = Math.max(0, player.squash - dt * 6);
+}
+
+const sound = {
+  ac: null, muted: false,
+  unlock() {                            // browsers only allow audio after a click or key
+    if (!this.ac) { try { this.ac = new AudioContext(); } catch {} }
+  },
+  play(freq, dur, type = 'square') {
+    if (this.muted || !this.ac) return;
+    const t = this.ac.currentTime;
+    const o = this.ac.createOscillator(), g = this.ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.ac.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  },
+};
+
+/* ---------------------------------------------------------------------
+   DRAWING. Kept separate from updating, as in any engine.
+   --------------------------------------------------------------------- */
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+}
+function text(str, x, y, size, color, align = 'center', font = 'Silkscreen') {
+  ctx.fillStyle = color;
+  ctx.font = `${size}px "${font}", "IBM Plex Mono", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.fillText(str, x, y);
+}
+
+// Far and near ice hills, drawn as repeating bumps that scroll slower than the blocks.
+function hills(factor, baseY, amp, period, color) {
+  const half = period / 2, scrolled = distance * factor;
+  const first = Math.floor(scrolled / half), off = scrolled % half;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let i = 0; i * half - off <= W + half; i++) {
+    ctx.lineTo(i * half - off, baseY - ((first + i) % 2 ? amp : 0));
+  }
+  ctx.lineTo(W + half, H); ctx.fill();
+}
+
+const BLOCK_COLORS = () => ({ ice: COLORS.frost, crumble: COLORS.violet, moving: COLORS.blueviolet, bouncy: COLORS.gold });
+
+function drawPlatform(p) {
+  const color = BLOCK_COLORS()[p.type];
+  let jitter = 0;
+  if (p.timer !== undefined && !p.falling && !reduceMotion) jitter = (Math.random() - 0.5) * 2;
+  const h = BLOCK_H * (1 - p.squash * 0.4);
+  const y = p.y + (BLOCK_H - h) * 0.5;
+  ctx.globalAlpha = p.falling ? 0.6 : 1;
+  ctx.fillStyle = color;
+  roundRect(p.x + jitter, y, p.w, h, 4);
+  ctx.fillStyle = COLORS.ink; ctx.globalAlpha *= 0.55;                       // frosty top highlight
+  ctx.fillRect(p.x + jitter + 4, y + 2, p.w - 8, 2);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = COLORS.court;
+  if (p.type === 'crumble') {                                                // crack marks
+    for (let cx = p.x + 12; cx < p.x + p.w - 8; cx += 22) ctx.fillRect(cx + jitter, y + 5, 2, h - 7);
+  } else if (p.type === 'bouncy') {                                          // spring coils
+    for (let cx = p.x + 10; cx < p.x + p.w - 8; cx += 10) ctx.fillRect(cx, y + h / 2 - 1, 5, 3);
+  } else if (p.type === 'moving') {                                          // up/down arrows
+    const mx = p.x + p.w / 2;
+    ctx.beginPath(); ctx.moveTo(mx - 4, y + 7); ctx.lineTo(mx, y + 3); ctx.lineTo(mx + 4, y + 7);
+    ctx.moveTo(mx - 4, y + h - 7); ctx.lineTo(mx, y + h - 3); ctx.lineTo(mx + 4, y + h - 7);
+    ctx.strokeStyle = COLORS.court; ctx.lineWidth = 2; ctx.stroke();
+  }
+  if (!p.falling) {                                                          // icicles underneath
+    ctx.fillStyle = color; ctx.globalAlpha = 0.5;
+    for (let ix = p.x + 8; ix < p.x + p.w - 6; ix += 17) {
+      ctx.beginPath(); ctx.moveTo(ix, y + h); ctx.lineTo(ix + 5, y + h); ctx.lineTo(ix + 2.5, y + h + 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawGem(g) {
+  const y = g.y + Math.sin(time * 4 + g.bob) * 3;
+  ctx.fillStyle = COLORS.frost;
+  ctx.beginPath(); ctx.moveTo(g.x, y - 8); ctx.lineTo(g.x + 6, y); ctx.lineTo(g.x, y + 8); ctx.lineTo(g.x - 6, y); ctx.fill();
+  ctx.fillStyle = COLORS.ink;
+  ctx.fillRect(g.x - 1, y - 4, 2, 4);
+}
+
+// The studio logo *is* the wizard: a 24x24 pixel sprite drawn at 2x.
+const wizard = new Image();
+wizard.src = 'brand/frozenwizard-logo.svg';
+const SPRITE = 48;
+
+function drawPlayer() {
+  if (!(wizard.complete && wizard.naturalWidth)) return;
+  const sx = 1 + player.squash * 0.15, sy = 1 - player.squash * 0.15;
+  ctx.save();
+  ctx.translate(player.x, player.y + 2);
+  ctx.scale(player.face * sx, sy);
+  ctx.drawImage(wizard, -SPRITE * 0.42, -SPRITE, SPRITE, SPRITE);   // feet line up with (x, y)
+  ctx.restore();
+  if (state === 'play' && !player.ground && player.airJumps > 0) {  // air jump ready: a little spark
+    ctx.fillStyle = COLORS.frost; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time * 12);
+    ctx.fillRect(player.x - 2, player.y + 6, 4, 4); ctx.globalAlpha = 1;
+  }
+}
+
+function draw() {
+  ctx.save();
+  ctx.fillStyle = COLORS.court; ctx.fillRect(0, 0, W, H);
+  if (shake && !reduceMotion) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+  ctx.globalAlpha = 0.35; hills(0.1, H - 110, 40, 180, COLORS.line); ctx.globalAlpha = 1;
+  hills(0.25, H - 50, 26, 120, COLORS.line);
+  ctx.fillStyle = COLORS.ink;
+  for (const s of snow) { ctx.globalAlpha = 0.5; ctx.fillRect(s.x, s.y, s.r, s.r); }
+  ctx.globalAlpha = 1;
+
+  for (const p of platforms) drawPlatform(p);
+  for (const g of gems) drawGem(g);
+  if (state !== 'title') drawPlayer();
+
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / 0.5);
+    ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // HUD
+  ctx.fillStyle = COLORS.court; ctx.fillRect(0, 0, W, HUD);
+  ctx.strokeStyle = COLORS.line; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, HUD); ctx.lineTo(W, HUD); ctx.stroke();
+  text(`SCORE ${String(score()).padStart(5, '0')}`, 12, HUD / 2, 14, COLORS.ink, 'left');
+  text(`${Math.floor(distance / 10)} m`, W / 2, HUD / 2, 14, COLORS.muted);
+  text(`◆ ${gemCount}`, W - 12, HUD / 2, 14, COLORS.frost, 'right', 'IBM Plex Mono');
+
+  drawOverlay();
+}
+
+function panel(title, lines, titleColor = COLORS.frost) {
+  ctx.fillStyle = 'rgba(15, 10, 38, 0.82)';
+  ctx.fillRect(0, HUD + 1, W, H - HUD - 1);
+  text(title, W / 2, H / 2 - 30, 32, titleColor);
+  lines.forEach((l, i) => text(l, W / 2, H / 2 + 12 + i * 22, 13, i === lines.length - 1 ? COLORS.ink : COLORS.muted, 'center', 'IBM Plex Mono'));
+}
+
+function drawOverlay() {
+  if (state === 'title') {
+    panel('JUMPING JUMP', [`Best ${best}`, 'Hop across the ice blocks. Don\'t fall in the holes!', 'You get one extra frost jump in mid-air.', '', 'Press Space or tap to start']);
+    if (wizard.complete && wizard.naturalWidth) ctx.drawImage(wizard, W / 2 - 36, H / 2 - 140, 72, 72);
+    text('FROZENWIZARD PRESENTS', W / 2, H / 2 - 58, 11, COLORS.violet);
+  }
+  else if (state === 'paused') panel('PAUSED', ['', 'Press Space or tap to resume']);
+  else if (state === 'over') panel('YOU FELL!', [`Score ${score()}  ·  Best ${best}`, `${Math.floor(distance / 10)} m  ·  ${gemCount} crystals`, '', 'Press Space or tap to play again'], COLORS.rose);
+}
+
+/* ---------------------------------------------------------------------
+   THE GAME LOOP. Measure delta time, update, draw, repeat.
+   --------------------------------------------------------------------- */
+let last = performance.now();
+buildWorld(); resetPlayer();
+
+function frame(now) {
+  const dt = Math.min(1 / 30, (now - last) / 1000);  // cap dt so a lag spike can't skip a landing
+  last = now;
+  if (state === 'play') { updateWorld(dt); updatePlayer(dt); }
+  else if (state === 'title') time += dt;
+  updateFx(dt, state === 'play');
+  draw();
+  requestAnimationFrame(frame);
+}
+document.fonts.ready.then(() => requestAnimationFrame(frame));
+canvas.focus();
+</script>
+</body>
+</html>
