@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Frozen Tower</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  /* FrozenWizard theme: shared by every FW game. One dark look, colors set explicitly. */
+  :root {
+    color-scheme: dark;
+    --bg: #1a1240;         /* indigo */
+    --court: #231a52;
+    --line: #3a2d78;
+    --ink: #eaf6ff;        /* ice white */
+    --muted: #a59cd0;
+    --violet: #b48cff;
+    --purple: #7c4ddb;
+    --blueviolet: #7a6cf0;
+    --frost: #8fd3ff;
+    --rose: #ff6fa8;       /* danger / sad endings */
+    --gold: #ffd66e;       /* warm endings */
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    padding: 12px 16px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+  header {
+    width: 100%;
+    max-width: var(--game-w);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h1 {
+    font: 700 22px/1 "Silkscreen", "IBM Plex Mono", monospace;
+    letter-spacing: 0.04em;
+    margin: 0;
+    color: var(--frost);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 40px; height: 40px; image-rendering: pixelated; }
+  .studio {
+    display: block;
+    font: 700 11px/1 "Silkscreen", "IBM Plex Mono", monospace;
+    letter-spacing: 0.08em;
+    color: var(--frost);
+    margin-bottom: 4px;
+  }
+  .studio span { color: var(--violet); }
+  .keys { color: var(--muted); font-size: 12px; text-align: right; }
+  kbd {
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0 4px;
+    color: var(--ink);
+  }
+  :root { --game-w: min(720px, 100%); }
+
+  /* ---- the story panel ---- */
+  .stage {
+    position: relative;
+    width: var(--game-w);
+    min-height: min(520px, calc(100dvh - 110px));
+    background: var(--court);
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  #snow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .hud {
+    position: relative;
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+    font: 12px/1.4 "Silkscreen", "IBM Plex Mono", monospace;
+    color: var(--muted);
+  }
+  .hud .items { color: var(--frost); text-align: right; }
+  .scene {
+    position: relative;
+    flex: 1;
+    display: flex; flex-direction: column;
+    padding: 20px 22px 18px;
+    gap: 14px;
+  }
+  .scene-head { display: flex; align-items: center; gap: 14px; }
+  .portrait {
+    width: 64px; height: 64px; flex: none;
+    image-rendering: pixelated;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg);
+  }
+  .place {
+    font: 700 11px/1 "Silkscreen", "IBM Plex Mono", monospace;
+    letter-spacing: 0.08em; color: var(--violet); margin: 0 0 6px;
+  }
+  h2 {
+    font: 700 22px/1.1 "Silkscreen", "IBM Plex Mono", monospace;
+    margin: 0; color: var(--frost);
+  }
+  .text {
+    font-size: 15px; line-height: 1.7;
+    min-height: 7.5em;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+  .text .speaker { color: var(--violet); }
+  .note { color: var(--frost); font-size: 13px; min-height: 1.4em; margin: 0; }
+  .choices { list-style: none; margin: auto 0 0; padding: 0; display: grid; gap: 8px; }
+  .choices button {
+    width: 100%; text-align: left;
+    font: 14px/1.4 "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 10px 12px;
+    cursor: pointer;
+    display: flex; gap: 10px;
+    transition: border-color .12s, transform .12s;
+  }
+  .choices button .n { color: var(--muted); }
+  .choices button:hover, .choices button.sel { border-color: var(--frost); transform: translateX(3px); }
+  .choices button.sel .n { color: var(--frost); }
+  .choices button:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+  .choices button .lock { margin-left: auto; color: var(--frost); font-size: 12px; }
+  .hint { color: var(--muted); font-size: 12px; text-align: center; margin: 0; min-height: 1.5em; }
+
+  .ending h2 { font-size: 26px; }
+  .ending.warm h2 { color: var(--gold); }
+  .ending.sad h2 { color: var(--rose); }
+  .endings-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .endings-list li {
+    font-size: 12px; padding: 3px 8px; border-radius: 4px;
+    border: 1px solid var(--line); color: var(--muted);
+  }
+  .endings-list li.found { border-color: var(--frost); color: var(--ink); }
+
+  @media (max-width: 560px) { .keys { display: none; } .scene { padding: 16px 14px; } h2 { font-size: 18px; } }
+  @media (prefers-reduced-motion: reduce) { .choices button { transition: none; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img class="logo" src="brand/frozenwizard-logo.svg" alt="FrozenWizard logo">
+    <div><span class="studio">FROZEN<span>WIZARD</span></span><h1>The Frozen Tower</h1></div>
+  </div>
+  <div class="keys"><kbd>1</kbd>–<kbd>4</kbd> / <kbd>↑</kbd><kbd>↓</kbd> pick · <kbd>Space</kbd> select / skip</div>
+</header>
+
+<main class="stage">
+  <canvas id="snow" aria-hidden="true"></canvas>
+  <div class="hud"><span id="endingsCount">ENDINGS 0/6</span><span class="items" id="items"></span></div>
+  <section class="scene" id="scene" aria-live="polite"></section>
+</main>
+
+<script>
+/* =====================================================================
+   THE FROZEN TOWER: a short branching story.
+   The whole story is data (STORY below). Each scene has text and choices;
+   a choice can need a flag ("needs"), set flags ("gives"), and go to a scene.
+   Scenes marked "ending" finish a run and are remembered in localStorage.
+   ===================================================================== */
+const STORY = {
+  start: {
+    place: 'HOLLOWMERE TOWER', title: 'A Cold Awakening',
+    text: `You wake on the stone floor of your tower. Your hearth fire is frozen solid: the flames stand still, trapped in clear ice.
+
+Through the window, the village of Hollowmere lies buried in snow. It has not stopped snowing for one hundred days.
+
+Your staff hums softly. Something is wrong with winter.`,
+    choices: [
+      { label: 'Look closer at the frozen fire', to: 'fire', hideIf: 'spark' },
+      { label: 'Climb to the observatory', to: 'observatory', hideIf: 'map' },
+      { label: 'Go down to the village', to: 'village', hideIf: 'mira' },
+      { label: 'Head straight into the Whitewood forest', to: 'forest' },
+    ],
+  },
+  fire: {
+    place: 'HOLLOWMERE TOWER', title: 'The Frozen Fire',
+    text: `You kneel by the hearth. Deep inside the ice, one tiny spark is still moving, beating like a heart.
+
+You breathe on the ice. It cracks, and the spark floats up into your palm. It is warm, the only warm thing left in the world.`,
+    gives: 'spark', note: 'You carry the LAST SPARK.',
+    choices: [{ label: 'Tuck it in your robe and stand up', to: 'start' }],
+  },
+  observatory: {
+    place: 'THE OBSERVATORY', title: 'Stars Under Snow',
+    text: `At the top of the tower your old brass telescope is crusted with frost. You wipe it clean and look out.
+
+Deep in the Whitewood, at the very centre, something glows a cold, bright blue. You sketch the paths to it on the back of an old star chart.`,
+    gives: 'map', note: 'You carry a STAR CHART of the Whitewood.',
+    choices: [{ label: 'Roll up the chart and climb back down', to: 'start' }],
+  },
+  village: {
+    place: 'HOLLOWMERE VILLAGE', title: 'Snowed In',
+    text: `The villagers huddle around candles that give no heat. A small girl in a red scarf tugs your sleeve.
+
+<span class="speaker">MIRA:</span> "It started when the bell rang in the forest. Grandma says there used to be a winter festival, with songs for the Winter Queen. But nobody has held it for years."
+
+She pulls her scarf tight. "Can I come with you? I know the old songs."`,
+    choices: [
+      { label: '"Stay close to me, Mira."', to: 'villageYes', gives: 'mira' },
+      { label: '"It\'s too dangerous. Stay here, where it\'s safe."', to: 'start' },
+    ],
+  },
+  villageYes: {
+    place: 'HOLLOWMERE VILLAGE', title: 'A Small Companion',
+    text: `Mira grins and grabs a lantern that isn't lit. "For when we find the fire again," she says.
+
+Her grandmother watches from a doorway, and nods at you.`,
+    note: 'MIRA walks with you.',
+    choices: [{ label: 'Walk back towards the tower road', to: 'start' }],
+  },
+  forest: {
+    place: 'THE WHITEWOOD', title: 'Between the Trees',
+    text: `Snow falls without a sound. Every tree looks the same, and the path splits three ways, then five, then more than you can count.
+
+Somewhere ahead, something whimpers.`,
+    choices: [
+      { label: 'Follow the star chart to the blue light', to: 'bellApproach', needs: 'map' },
+      { label: 'Follow the whimpering', to: 'fox' },
+      { label: 'Pick a path and hope', to: 'lost' },
+    ],
+  },
+  fox: {
+    place: 'THE WHITEWOOD', title: 'The White Fox',
+    text: `A small white fox is stuck, its back paw frozen into the ice of a stream. It watches you with bright silver eyes and does not run.`,
+    choices: [
+      { label: 'Melt the ice with your staff', to: 'foxFree', gives: 'fox' },
+      { label: 'Leave it. You have no time.', to: 'lost' },
+    ],
+  },
+  foxFree: {
+    place: 'THE WHITEWOOD', title: 'A Guide',
+    text: `The ice hisses and lets go. The fox shakes out its paw, looks at you for a long moment, then trots ahead and waits.
+
+It knows the way.`,
+    note: 'The WHITE FOX leads you.',
+    choices: [{ label: 'Follow the fox', to: 'bellApproach' }],
+  },
+  lost: {
+    place: 'THE WHITEWOOD', title: 'Lost',
+    text: `You walk for hours. Your footprints fill with snow behind you. The light of your staff grows dimmer.
+
+Far away, wolves begin to howl.`,
+    choices: [
+      { label: 'Walk towards the howling. Wolves live near open ground.', to: 'endLost' },
+      { label: 'Turn back and follow your fading footprints', to: 'forestAgain' },
+    ],
+  },
+  forestAgain: {
+    place: 'THE WHITEWOOD', title: 'Back at the Fork',
+    text: `Somehow you find the fork again, shivering. The whimpering is still there, weaker now.`,
+    choices: [
+      { label: 'Follow the star chart to the blue light', to: 'bellApproach', needs: 'map' },
+      { label: 'Follow the whimpering', to: 'fox' },
+    ],
+  },
+  bellApproach: {
+    place: 'HEART OF THE WHITEWOOD', title: 'The Winter Bell',
+    text: `In a clearing stands an oak made entirely of ice. From its branches hangs a great blue bell. It rings once, and a hundred new snowflakes fall.
+
+Beneath it sits a tall, pale woman in a gown of frost. She does not look cruel. She looks tired, and very sad.
+
+<span class="speaker">THE WINTER QUEEN:</span> "Another visitor. Have you come to stop me, wizard?"`,
+    choices: [
+      { label: 'Raise your staff and shatter the bell', to: 'endShatter' },
+      { label: '"Why do you keep ringing it?"', to: 'queenTalk' },
+      { label: 'Grab the rope and ring it yourself', to: 'endWhite' },
+    ],
+  },
+  queenTalk: {
+    place: 'HEART OF THE WHITEWOOD', title: 'The Queen\'s Story',
+    text: `<span class="speaker">THE WINTER QUEEN:</span> "Once, Hollowmere sang for me each winter. They lit fires, danced in the snow, thanked me for the quiet season. Then they forgot.
+
+When no one remembers you, you fade. So I ring the bell, and winter grows, and at least they cannot forget me now."
+
+She looks at her pale hands. "I am so cold, wizard."`,
+    choices: [
+      { label: 'Mira steps forward and starts to sing', to: 'endFestival', needs: 'mira' },
+      { label: 'Offer her the last spark', to: 'endSeasons', needs: 'spark' },
+      { label: '"Rest. I will keep winter for you."', to: 'endKeeper' },
+      { label: 'Shatter the bell while she isn\'t looking', to: 'endShatter' },
+    ],
+  },
+
+  /* ---------- endings ---------- */
+  endFestival: {
+    ending: 'The First Festival', mood: 'warm',
+    text: `Mira's voice is small and shaky, then brave. It's an old song about snow that sleeps and fields that wake.
+
+The Queen's eyes fill with frost-bright tears. The bell falls silent. By morning the snow has stopped, and a line of villagers with lanterns comes up the forest path, singing.
+
+Every winter after that, Hollowmere holds a festival. The Queen always comes.`,
+  },
+  endSeasons: {
+    ending: 'Two Seasons', mood: 'warm',
+    text: `You open your hand. The spark drifts to her and settles over her heart. For the first time in a hundred days, she smiles.
+
+<span class="speaker">THE WINTER QUEEN:</span> "Half the year is mine. Half the year belongs to the sun. That is fair."
+
+The ice oak drips. Far away, your hearth fire flickers back to life.`,
+  },
+  endKeeper: {
+    ending: 'The Frozen Wizard', mood: 'bittersweet',
+    text: `You take her cold hand. The frost climbs your sleeves, your beard, the tip of your hat. It doesn't hurt.
+
+The Queen fades gently into the snow, finally able to rest. Winter softens and turns into a proper season again.
+
+In Hollowmere they tell stories now about the Frozen Wizard of the Whitewood, who keeps the quiet months. The children leave you songs.`,
+  },
+  endShatter: {
+    ending: 'Shattered Spring', mood: 'sad',
+    text: `Your staff strikes the bell. It bursts into a million blue shards, and the Queen cries out once, then is gone like breath on glass.
+
+The snow stops. Spring comes, fast and green.
+
+But every year after, the winters are thin and grey, and on quiet nights you swear you hear a bell, very far away.`,
+  },
+  endWhite: {
+    ending: 'Endless White', mood: 'sad',
+    text: `You pull the rope. The bell's voice rolls out over the land, and the snow falls thicker than ever.
+
+<span class="speaker">THE WINTER QUEEN:</span> "Thank you, wizard. Now they will never forget."
+
+Hollowmere sleeps under the white for a hundred years more.`,
+  },
+  endLost: {
+    ending: 'Lost in the White', mood: 'sad',
+    text: `The howling leads to open ground, and to the wolves. You hold them off with the last light of your staff, backing away into the trees.
+
+When the light finally goes out, only the snow is left, falling softly over a wizard's hat.`,
+  },
+};
+
+const ENDINGS = Object.values(STORY).filter(s => s.ending).map(s => s.ending);
+const ITEM_NAMES = { spark: 'SPARK', map: 'CHART', mira: 'MIRA', fox: 'FOX' };
+
+/* ---------------------------------------------------------------------
+   STATE. Flags collected this run, plus endings found across all runs.
+   --------------------------------------------------------------------- */
+let flags = new Set();
+let found = new Set();
+try { found = new Set(JSON.parse(localStorage.getItem('frozen-tower-endings') || '[]')); } catch {}
+function saveFound() {
+  try { localStorage.setItem('frozen-tower-endings', JSON.stringify([...found])); } catch {}
+}
+
+const sceneEl = document.getElementById('scene');
+const itemsEl = document.getElementById('items');
+const countEl = document.getElementById('endingsCount');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const wizardSrc = 'brand/frozenwizard-logo.svg';
+
+function updateHud() {
+  countEl.textContent = `ENDINGS ${found.size}/${ENDINGS.length}`;
+  itemsEl.textContent = [...flags].map(f => ITEM_NAMES[f]).join(' · ');
+}
+
+/* ---------------------------------------------------------------------
+   TYPEWRITER. Reveals the scene text a character at a time.
+   Space / click finishes it instantly. HTML tags are revealed whole.
+   --------------------------------------------------------------------- */
+let typing = null;
+
+function typeInto(el, html, done) {
+  if (reduceMotion) { el.innerHTML = html; done(); return; }
+  const parts = html.split(/(<[^>]+>)/);    // keep tags intact
+  let out = '', pi = 0, ci = 0;
+  const step = () => {
+    let n = 2;                               // characters per tick
+    while (n > 0 && pi < parts.length) {
+      const p = parts[pi];
+      if (p.startsWith('<')) { out += p; pi++; continue; }
+      if (ci < p.length) { out += p[ci++]; n--; } else { pi++; ci = 0; }
+    }
+    el.innerHTML = out + (pi < parts.length ? '<span aria-hidden="true">▌</span>' : '');
+    if (pi < parts.length) typing = { timer: setTimeout(step, 18), finish };
+    else { typing = null; done(); }
+  };
+  const finish = () => { clearTimeout(typing.timer); typing = null; el.innerHTML = html; done(); };
+  step();
+}
+function skipTyping() {
+  if (!typing) return false;
+  typing.finish();
+  return true;
+}
+
+/* ---------------------------------------------------------------------
+   SCENES. Build the DOM for a scene, then reveal the choices.
+   --------------------------------------------------------------------- */
+let choiceButtons = [], selected = 0;
+
+function go(id) {
+  const s = STORY[id];
+  if (s.gives) flags.add(s.gives);
+  if (s.ending) return showEnding(s);
+  updateHud();
+
+  sceneEl.className = 'scene';
+  sceneEl.innerHTML = `
+    <div class="scene-head">
+      <img class="portrait" src="${wizardSrc}" alt="">
+      <div><p class="place">${s.place}</p><h2>${s.title}</h2></div>
+    </div>
+    <p class="text"></p>
+    <p class="note"></p>
+    <ul class="choices"></ul>
+    <p class="hint">Space or click to skip</p>`;
+  const textEl = sceneEl.querySelector('.text');
+  typeInto(textEl, s.text, () => showChoices(s));
+}
+
+function showChoices(s) {
+  sceneEl.querySelector('.note').textContent = s.note || '';
+  sceneEl.querySelector('.hint').textContent = '';
+  const list = sceneEl.querySelector('.choices');
+  const visible = s.choices.filter(c => !(c.hideIf && flags.has(c.hideIf)));
+  list.innerHTML = '';
+  choiceButtons = visible.map((c, i) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    const locked = c.needs && !flags.has(c.needs);
+    b.innerHTML = `<span class="n">${i + 1}</span><span>${c.label}</span>` +
+                  (c.needs ? `<span class="lock">${locked ? 'needs ' : ''}${ITEM_NAMES[c.needs]}</span>` : '');
+    b.disabled = locked;
+    if (locked) b.style.opacity = 0.45;
+    b.addEventListener('click', () => choose(c));
+    b.addEventListener('mouseenter', () => select(i));
+    li.appendChild(b); list.appendChild(li);
+    return b;
+  });
+  select(choiceButtons.findIndex(b => !b.disabled));
+}
+
+function select(i) {
+  if (i < 0 || !choiceButtons[i] || choiceButtons[i].disabled) return;
+  selected = i;
+  choiceButtons.forEach((b, j) => b.classList.toggle('sel', j === i));
+}
+function moveSelection(dir) {
+  for (let k = 1; k <= choiceButtons.length; k++) {
+    const i = (selected + dir * k + choiceButtons.length * 2) % choiceButtons.length;
+    if (!choiceButtons[i].disabled) return select(i);
+  }
+}
+function choose(c) {
+  if (c.gives) flags.add(c.gives);
+  chime(c.gives ? 880 : 520);
+  go(c.to);
+}
+
+function showEnding(s) {
+  const isNew = !found.has(s.ending);
+  found.add(s.ending); saveFound();
+  flags = new Set();
+  updateHud();
+  chime(s.mood === 'sad' ? 196 : 660, 0.4);
+
+  sceneEl.className = `scene ending ${s.mood === 'sad' ? 'sad' : 'warm'}`;
+  sceneEl.innerHTML = `
+    <div class="scene-head">
+      <img class="portrait" src="${wizardSrc}" alt="">
+      <div><p class="place">ENDING ${ENDINGS.indexOf(s.ending) + 1} OF ${ENDINGS.length}${isNew ? ' · NEW' : ''}</p><h2>${s.ending}</h2></div>
+    </div>
+    <p class="text"></p>
+    <ul class="endings-list" hidden>${ENDINGS.map(e => `<li class="${found.has(e) ? 'found' : ''}">${found.has(e) ? e : '? ? ?'}</li>`).join('')}</ul>
+    <ul class="choices"></ul>
+    <p class="hint">Space or click to skip</p>`;
+  typeInto(sceneEl.querySelector('.text'), s.text, () => {
+    sceneEl.querySelector('.endings-list').hidden = false;
+    sceneEl.querySelector('.hint').textContent = found.size === ENDINGS.length
+      ? 'You found every ending. Thank you for playing!'
+      : 'Different choices lead to different endings.';
+    showChoices({ choices: [{ label: 'Begin the story again', to: 'start' }] });
+  });
+}
+
+/* ---------------------------------------------------------------------
+   INPUT. Number keys pick directly; arrows move; Space/Enter confirms.
+   --------------------------------------------------------------------- */
+addEventListener('keydown', e => {
+  if (e.key === 'm' || e.key === 'M') { muted = !muted; return; }
+  if ([' ', 'Enter', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
+  unlockAudio();
+  if (skipTyping()) return;
+  if (e.key === 'ArrowDown') moveSelection(1);
+  else if (e.key === 'ArrowUp') moveSelection(-1);
+  else if (e.key === ' ' || e.key === 'Enter') choiceButtons[selected]?.click();
+  else if (/^[1-9]$/.test(e.key)) choiceButtons[+e.key - 1]?.click();
+});
+sceneEl.addEventListener('click', e => {
+  unlockAudio();
+  if (!e.target.closest('button')) skipTyping();
+});
+
+/* ---------------------------------------------------------------------
+   POLISH. A soft chime on each choice, and snow behind the page.
+   --------------------------------------------------------------------- */
+let ac = null, muted = false;
+function unlockAudio() { if (!ac) { try { ac = new AudioContext(); } catch {} } }
+function chime(freq, dur = 0.18) {
+  if (muted || !ac) return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+
+const snowCanvas = document.getElementById('snow');
+const sctx = snowCanvas.getContext('2d');
+const flakes = Array.from({ length: reduceMotion ? 0 : 60 }, () => ({ x: Math.random(), y: Math.random(), r: 0.6 + Math.random() * 1.6, v: 0.02 + Math.random() * 0.04, d: Math.random() * 6 }));
+function snowFrame(t) {
+  const w = snowCanvas.clientWidth, h = snowCanvas.clientHeight, dpr = devicePixelRatio || 1;
+  if (snowCanvas.width !== w * dpr || snowCanvas.height !== h * dpr) { snowCanvas.width = w * dpr; snowCanvas.height = h * dpr; }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.clearRect(0, 0, w, h);
+  sctx.fillStyle = 'rgba(234, 246, 255, 0.35)';
+  for (const f of flakes) {
+    f.y += f.v / 60; if (f.y > 1) { f.y = 0; f.x = Math.random(); }
+    sctx.fillRect(f.x * w + Math.sin(t / 1000 + f.d) * 6, f.y * h, f.r, f.r);
+  }
+  requestAnimationFrame(snowFrame);
+}
+if (flakes.length) requestAnimationFrame(snowFrame);
+
+go('start');
+</script>
+</body>
+</html>
