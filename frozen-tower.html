@@ -35,7 +35,6 @@
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    margin: 0;
   }
   header {
     width: 100%;
@@ -69,92 +68,19 @@
     padding: 0 4px;
     color: var(--ink);
   }
-  :root { --game-w: min(720px, 100%); }
-
-  /* ---- the story panel ---- */
-  .stage {
-    position: relative;
+  :root { --game-w: min(880px, calc((100dvh - 132px) * 16 / 9), 100%); }
+  canvas {
+    display: block;
     width: var(--game-w);
-    min-height: min(520px, calc(100dvh - 132px));
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
     background: var(--court);
     border: 2px solid var(--line);
     border-radius: 6px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    touch-action: none;
   }
-  #snow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .hud {
-    position: relative;
-    display: flex; justify-content: space-between; gap: 12px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--line);
-    font: 12px/1.4 "Silkscreen", "IBM Plex Mono", monospace;
-    color: var(--muted);
-  }
-  .hud .items { color: var(--frost); text-align: right; }
-  .scene {
-    position: relative;
-    flex: 1;
-    display: flex; flex-direction: column;
-    padding: 20px 22px 18px;
-    gap: 14px;
-  }
-  .scene-head { display: flex; align-items: center; gap: 14px; }
-  .portrait {
-    width: 64px; height: 64px; flex: none;
-    image-rendering: pixelated;
-    border: 1px solid var(--line); border-radius: 6px;
-    background: var(--bg);
-  }
-  .place {
-    font: 700 11px/1 "Silkscreen", "IBM Plex Mono", monospace;
-    letter-spacing: 0.08em; color: var(--violet); margin: 0 0 6px;
-  }
-  h2 {
-    font: 700 22px/1.1 "Silkscreen", "IBM Plex Mono", monospace;
-    margin: 0; color: var(--frost);
-  }
-  .text {
-    font-size: 15px; line-height: 1.7;
-    min-height: 7.5em;
-    white-space: pre-wrap;
-    margin: 0;
-  }
-  .text .speaker { color: var(--violet); }
-  .note { color: var(--frost); font-size: 13px; min-height: 1.4em; margin: 0; }
-  .choices { list-style: none; margin: auto 0 0; padding: 0; display: grid; gap: 8px; }
-  .choices button {
-    width: 100%; text-align: left;
-    font: 14px/1.4 "IBM Plex Mono", ui-monospace, monospace;
-    color: var(--ink);
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    padding: 10px 12px;
-    cursor: pointer;
-    display: flex; gap: 10px;
-    transition: border-color .12s, transform .12s;
-  }
-  .choices button .n { color: var(--muted); }
-  .choices button:hover, .choices button.sel { border-color: var(--frost); transform: translateX(3px); }
-  .choices button.sel .n { color: var(--frost); }
-  .choices button:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
-  .choices button .lock { margin-left: auto; color: var(--frost); font-size: 12px; }
-  .hint { color: var(--muted); font-size: 12px; text-align: center; margin: 0; min-height: 1.5em; }
-
-  .ending h2 { font-size: 26px; }
-  .ending.warm h2 { color: var(--gold); }
-  .ending.sad h2 { color: var(--rose); }
-  .endings-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-  .endings-list li {
-    font-size: 12px; padding: 3px 8px; border-radius: 4px;
-    border: 1px solid var(--line); color: var(--muted);
-  }
-  .endings-list li.found { border-color: var(--frost); color: var(--ink); }
-
-  @media (max-width: 560px) { .keys { display: none; } .scene { padding: 16px 14px; } h2 { font-size: 18px; } }
-  @media (prefers-reduced-motion: reduce) { .choices button { transition: none; } }
+  canvas:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; }
+  @media (max-width: 600px) { .keys { display: none; } }
   .copy { color: var(--muted); font-size: 11px; margin: 0; text-align: center; }
 </style>
 </head>
@@ -165,390 +91,1224 @@
     <img class="logo" src="brand/frozenwizard-logo.svg" alt="FrozenWizard logo">
     <div><span class="studio">FROZEN<span>WIZARD</span></span><h1>The Frozen Tower</h1></div>
   </div>
-  <div class="keys"><kbd>1</kbd>–<kbd>4</kbd> / <kbd>↑</kbd><kbd>↓</kbd> pick · <kbd>Space</kbd> select / skip</div>
+  <div class="keys"><kbd>←</kbd><kbd>→</kbd> walk · <kbd>↑</kbd>/<kbd>Space</kbd> act · <kbd>1</kbd>–<kbd>4</kbd> choose</div>
 </header>
-
-<main class="stage">
-  <canvas id="snow" aria-hidden="true"></canvas>
-  <div class="hud"><span id="endingsCount">ENDINGS 0/6</span><span class="items" id="items"></span></div>
-  <section class="scene" id="scene" aria-live="polite"></section>
-</main>
-
+<canvas id="game" tabindex="0" aria-label="The Frozen Tower, a small story adventure. Left and Right to walk, Up or Space to talk, look and go through doors, number keys to pick answers."></canvas>
 <p class="copy">© 2026 FrozenWizard · Trusha Patel. All rights reserved.</p>
 
 <script>
 /* =====================================================================
-   THE FROZEN TOWER: a short branching story.
-   The whole story is data (STORY below). Each scene has text and choices;
-   a choice can need a flag ("needs"), set flags ("gives"), and go to a scene.
-   Scenes marked "ending" finish a run and are remembered in localStorage.
+   THE FROZEN TOWER: a small walk-around story adventure.
+   Walk between places, talk to people, pick things up. What you carry
+   (and who walks with you) decides which of six endings you reach.
+   Everything runs in a fixed 640x360 world; the canvas is scaled to fit.
    ===================================================================== */
-const STORY = {
-  start: {
-    place: 'HOLLOWMERE TOWER', title: 'A Cold Awakening',
-    text: `You wake on the stone floor of your tower. Your hearth fire is frozen solid: the flames stand still, trapped in clear ice.
+const W = 640, H = 360;
+const PLAY_GROUND = 304, END_GROUND = 196;
+let GROUND = PLAY_GROUND;               // the snow line feet stand on (endings use a higher one)
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const C = { night: '#120c30', court: '#231a52', line: '#3a2d78', ink: '#eaf6ff', muted: '#a59cd0',
+            violet: '#b48cff', purple: '#7c4ddb', frost: '#8fd3ff', ice: '#bfe3ff', rose: '#ff6fa8', gold: '#ffd66e' };
 
-Through the window, the village of Hollowmere lies buried in snow. It has not stopped snowing for one hundred days.
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;    // keep the pixel art crisp
+}
+resize();
+addEventListener('resize', resize);
 
-Your staff hums softly. Something is wrong with winter.`,
-    choices: [
-      { label: 'Look closer at the frozen fire', to: 'fire', hideIf: 'spark' },
-      { label: 'Climb to the observatory', to: 'observatory', hideIf: 'map' },
-      { label: 'Go down to the village', to: 'village', hideIf: 'mira' },
-      { label: 'Head straight into the Whitewood forest', to: 'forest' },
+/* ---------------------------------------------------------------------
+   STEP 1: PIXEL CHARACTERS. Each sprite is a little grid of letters;
+   each letter is a palette colour and "." is see-through.
+   --------------------------------------------------------------------- */
+const PAL = { k: '#0f0a26', s: '#f2c9a0', b: '#6b4226', r: '#e0445a', o: '#d9803a', g: '#c9c5da',
+              p: '#7c4ddb', w: '#eaf6ff', f: '#8fd3ff', q: '#d6ecff', x: '#4a8fd0', c: '#8a5a3c' };
+const SPR = {
+  mira: [
+    '....bbbbb...',
+    '...bbbbbbb..',
+    '...bsssssb..',
+    '...bsksksb..',
+    '...bsssssb..',
+    '....rrrrr...',
+    '...rrrrrrrr.',
+    '...ooooooo..',
+    '..sooooooos.',
+    '...ooooooo..',
+    '...ooooooo..',
+    '...ooooooo..',
+    '....kk.kk...',
+    '....kk.kk...'],
+  grandma: [
+    '.....ggg....',
+    '...ggggggg..',
+    '...gsssssg..',
+    '...gsksksg..',
+    '....sssss...',
+    '...ppppppp..',
+    '..ppppppppp.',
+    '..sxxxxxxxs.',
+    '...xxxxxxx..',
+    '...xxxxxxx..',
+    '..xxxxxxxxx.',
+    '..xxxxxxxxx.',
+    '..xxxxxxxxx.',
+    '...kk...kk..'],
+  baker: [
+    '...wwwwwww..',
+    '...wwwwwww..',
+    '....wwwww...',
+    '...bsssssb..',
+    '...bsksksb..',
+    '...bsssssb..',
+    '....sbbbs...',
+    '..ccwwwwwcc.',
+    '.sccwwwwwccs',
+    '..ccwwwwwcc.',
+    '..ccwwwwwcc.',
+    '..ccwwwwwcc.',
+    '..ccccccccc.',
+    '...kk...kk..',
+    '...kk...kk..'],
+  queen: [
+    '..f...f...f...',
+    '..fffffffff...',
+    '...wwwwwww....',
+    '..wwqqqqqww...',
+    '..wwqkqkqww...',
+    '..wwqqqqqww...',
+    '..wwwqqqwww...',
+    '..ww.fff.ww...',
+    '...fffffff....',
+    '..fffffffff...',
+    '.qfffffffffq..',
+    '..fffffffff...',
+    '..ffxfffxff...',
+    '..fffffffff...',
+    '.fffffffffff..',
+    '.fffxfffxfff..',
+    'fffffffffffff.',
+    'fffffffffffff.',
+    'xfffffffffffx.',
+    'xxfffffffffxx.'],
+  fox: [
+    '..........w.w.',
+    '.........wwww.',
+    'ww.......wkwwk',
+    'www..wwwwwwww.',
+    '.wwwwwwwwwww..',
+    '..wwwwwwwwww..',
+    '...w.w...w.w..',
+    '...w.w...w.w..'],
+};
+const sprCache = {};
+function spr(name) {
+  if (sprCache[name]) return sprCache[name];
+  const rows = SPR[name], c = document.createElement('canvas');
+  c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext('2d');
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (PAL[ch]) { g.fillStyle = PAL[ch]; g.fillRect(x, y, 1, 1); } }));
+  return (sprCache[name] = c);
+}
+// Draw a sprite standing with its feet at (x, y).
+function drawSprite(src, x, y, scale, flip = false, alpha = 1) {
+  if (!src) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(Math.round(x), Math.round(y));
+  if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(src, -src.width * scale / 2, -src.height * scale, src.width * scale, src.height * scale);
+  ctx.restore();
+}
+
+// The studio logo is the wizard. We also bake an ice-blue copy for one ending.
+const wizardImg = new Image();
+let wizardC = null, wizardIce = null;
+wizardImg.onload = () => {
+  wizardC = document.createElement('canvas'); wizardC.width = wizardC.height = 24;
+  wizardC.getContext('2d').drawImage(wizardImg, 0, 0, 24, 24);
+  wizardIce = document.createElement('canvas'); wizardIce.width = wizardIce.height = 24;
+  const g = wizardIce.getContext('2d');
+  g.drawImage(wizardC, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(143, 211, 255, 0.6)'; g.fillRect(0, 0, 24, 24);
+};
+wizardImg.src = 'brand/frozenwizard-logo.svg';
+
+function drawWizard(x, y, face, img = wizardC, scale = 2) {
+  drawSprite(img, x + 2.5 * scale * face, y, scale, face < 0);   // sprite's body sits left of centre
+}
+
+/* ---------------------------------------------------------------------
+   STEP 2: DRAWING HELPERS. Small shapes the scenery is built from.
+   --------------------------------------------------------------------- */
+function hash(n) { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+function poly(pts, c) {
+  ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+  ctx.closePath(); ctx.fill();
+}
+function ellipse(x, y, rx, ry, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); }
+function glow(x, y, r, color, a) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, hexA(color, a)); g.addColorStop(1, hexA(color, 0));
+  ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+}
+function sky(top, bottom) {
+  const g = ctx.createLinearGradient(0, 0, 0, GROUND);
+  g.addColorStop(0, top); g.addColorStop(1, bottom);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, GROUND);
+}
+function text(str, x, y, size, color, align = 'center', font = 'Silkscreen') {
+  ctx.fillStyle = color;
+  ctx.font = `${size}px "${font}", "IBM Plex Mono", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.fillText(str, x, y);
+}
+function roundBox(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+  ctx.fillStyle = fill; ctx.fill();
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+// Draw world-space things (positions along the whole area) shifted by the camera.
+function world(camX, fn) { ctx.save(); ctx.translate(-Math.round(camX), 0); fn(); ctx.restore(); }
+
+const STARS = Array.from({ length: 70 }, (_, i) => ({ x: hash(i) * W, y: hash(i + 200) * 190, tw: 1 + hash(i + 400) * 3 }));
+function stars(camX, f = 0.05) {
+  for (const s of STARS) {
+    ctx.globalAlpha = 0.35 + 0.35 * Math.sin(time * s.tw + s.x);
+    rect((((s.x - camX * f) % W) + W) % W, s.y, 1.5, 1.5, C.ink);
+  }
+  ctx.globalAlpha = 1;
+}
+function moon(x, y, r) { glow(x, y, r * 4, C.ink, 0.12); ellipse(x, y, r, r, '#e8eefc'); ellipse(x + r * 0.35, y - r * 0.2, r * 0.25, r * 0.25, '#cfd8f0'); }
+
+// Snow falls over outdoor scenes. Positions come from a hash, so no particle list is needed.
+function snowfall(n, speed, camX = 0, x0 = 0, x1 = W, alpha = 0.7) {
+  if (reduceMotion) n = Math.floor(n / 4);
+  ctx.fillStyle = C.ink;
+  const span = x1 - x0;
+  for (let i = 0; i < n; i++) {
+    const sp = speed * (0.5 + hash(i + 7));
+    const y = (hash(i + 99) * H + time * sp) % H;
+    const x = x0 + (((hash(i) * span + Math.sin(time + i) * 8 - camX * 0.6) % span) + span) % span;
+    const r = 1 + hash(i + 3) * 1.5;
+    ctx.globalAlpha = alpha; ctx.fillRect(x, y, r, r);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Jagged mountains with snowy tips, scrolling slower than the ground (parallax).
+function range(camX, f, baseY, amp, step, color, seed, caps) {
+  const off = camX * f, i0 = Math.floor(off / step) - 1, n = Math.ceil(W / step) + 3;
+  const pt = i => [i * step - off, baseY - hash(i + seed) * amp];
+  ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, H);
+  for (let i = i0; i <= i0 + n; i++) ctx.lineTo(...pt(i));
+  ctx.lineTo(W, H); ctx.fill();
+  if (!caps) return;
+  for (let i = i0 + 1; i < i0 + n; i++) {
+    const [x, y] = pt(i), [lx, ly] = pt(i - 1), [rx, ry] = pt(i + 1);
+    if (y > ly || y > ry) continue;                                   // only real peaks get snow
+    ctx.globalAlpha = 0.75;
+    poly([x, y, x + (rx - x) * 0.25, y + (ry - y) * 0.25, x, y + 8, x + (lx - x) * 0.25, y + (ly - y) * 0.25], C.ink);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function pine(x, baseY, h, color, snow = 0.8) {
+  rect(x - h * 0.04, baseY - h * 0.2, h * 0.08, h * 0.2, '#2a1c1c');
+  for (let k = 0; k < 3; k++) {
+    const w = h * 0.62 * (1 - k * 0.24), yb = baseY - h * 0.16 - k * h * 0.24, th = h * 0.42;
+    poly([x - w / 2, yb, x + w / 2, yb, x, yb - th], color);
+    if (snow) { ctx.globalAlpha = snow; poly([x - w * 0.18, yb - th * 0.64, x + w * 0.18, yb - th * 0.64, x, yb - th], C.ink); ctx.globalAlpha = 1; }
+  }
+}
+function pineRow(camX, f, baseY, h, step, color, seed, snow = 0.35) {
+  const off = camX * f, i0 = Math.floor(off / step) - 2;
+  for (let i = i0; i < i0 + W / step + 4; i++) {
+    pine(i * step + hash(i + seed) * step * 0.6 - off, baseY, h * (0.7 + hash(i * 7 + seed) * 0.6), color, snow);
+  }
+}
+function ground(camX, color) {
+  rect(0, GROUND, W, H - GROUND, color);
+  rect(0, GROUND, W, 2, hexA(C.ink, 0.7));
+  const step = 90, i0 = Math.floor(camX / step) - 1;
+  for (let i = i0; i < i0 + W / step + 3; i++) ellipse(i * step + hash(i) * 40 - camX, GROUND + 8 + hash(i + 5) * 20, 26 + hash(i + 9) * 20, 4, hexA(C.ink, 0.25));
+}
+
+/* ---------------------------------------------------------------------
+   STEP 3: SCENERY. Buildings, trees and props, each a small function.
+   --------------------------------------------------------------------- */
+function house(x, w, h, wall, roof, o = {}) {
+  const top = GROUND - h, peak = top - h * 0.5;
+  rect(x + w * 0.68, peak + h * 0.14, 14, h * 0.4, '#4a3f7a');                 // chimney
+  rect(x + w * 0.68 - 2, peak + h * 0.14 - 4, 18, 5, C.ink);
+  rect(x, top, w, h, wall);
+  ctx.fillStyle = 'rgba(15, 10, 38, 0.28)';                                      // timber beams
+  ctx.fillRect(x, top, w, 5); ctx.fillRect(x + 6, top, 5, h); ctx.fillRect(x + w - 11, top, 5, h);
+  poly([x - 16, top + 1, x + w + 16, top + 1, x + w / 2, peak - 7], C.ink);      // snow on the roof
+  poly([x - 12, top + 7, x + w + 12, top + 7, x + w / 2, peak + 2], roof);
+  for (let ix = x - 8; ix < x + w + 8; ix += 12) poly([ix, top + 7, ix + 4, top + 7, ix + 2, top + 11 + hash(ix) * 8], C.ice);
+  const wins = w >= 130 ? [x + 22, x + w - 42] : [x + 16];
+  const flick = 0.5 + 0.12 * Math.sin(time * 3 + x);                              // candles that give no heat
+  for (const wx of wins) {
+    const wy = top + 22;
+    glow(wx + 10, wy + 10, 32, C.gold, 0.16);
+    rect(wx - 2, wy - 2, 24, 24, '#2a1c1c');
+    rect(wx, wy, 20, 20, hexA(C.gold, flick));
+    rect(wx + 9, wy, 2, 20, '#2a1c1c'); rect(wx, wy + 9, 20, 2, '#2a1c1c');
+    rect(wx - 3, wy + 21, 26, 3, C.ink);
+  }
+  const dx = x + w / 2 - 13;
+  rect(dx, GROUND - 40, 26, 40, '#3b2620');
+  rect(dx + 19, GROUND - 21, 3, 3, C.gold);
+  if (o.sign) {                                                                  // bakery sign with a bun
+    rect(x + w + 2, top + 14, 24, 3, '#2a1c1c');
+    rect(x + w + 8, top + 18, 18, 16, '#8a5a3c');
+    ellipse(x + w + 17, top + 27, 6, 4, '#d9803a');
+  }
+}
+function towerOutside(cx) {
+  rect(cx - 70, GROUND - 260, 140, 260, '#4a3f7a');
+  ctx.fillStyle = 'rgba(15, 10, 38, 0.25)';
+  for (let r = 0; r < 13; r++) for (let c = 0; c < 4; c++) ctx.fillRect(cx - 70 + c * 36 + (r % 2 ? 18 : 0), GROUND - 260 + r * 20, 34, 2);
+  poly([cx - 88, GROUND - 256, cx + 88, GROUND - 256, cx, GROUND - 350], C.ink);
+  poly([cx - 82, GROUND - 250, cx + 82, GROUND - 250, cx, GROUND - 340], '#5a33a8');
+  for (const wy of [GROUND - 210, GROUND - 140]) { rect(cx - 10, wy, 20, 28, '#1a1240'); rect(cx - 8, wy + 2, 16, 24, hexA(C.frost, 0.25)); }
+  rect(cx - 20, GROUND - 62, 40, 62, '#2e2468');
+  rect(cx - 16, GROUND - 58, 32, 58, '#6b4a36');
+  ellipse(cx, GROUND - 58, 16, 10, '#6b4a36');
+  rect(cx + 8, GROUND - 30, 3, 3, C.gold);
+}
+function lamp(x) {
+  rect(x - 2, GROUND - 70, 4, 70, '#1a1240');
+  rect(x - 7, GROUND - 84, 14, 14, '#2a2060');
+  rect(x - 5, GROUND - 82, 10, 10, hexA(C.frost, 0.45));
+  glow(x, GROUND - 77, 28, C.frost, 0.16);
+  rect(x - 8, GROUND - 87, 16, 3, C.ink);
+}
+function well(x) {
+  rect(x - 26, GROUND - 26, 52, 26, '#6d6590');
+  rect(x - 26, GROUND - 26, 52, 4, C.ink);
+  rect(x - 24, GROUND - 70, 4, 44, '#5a3a2a'); rect(x + 20, GROUND - 70, 4, 44, '#5a3a2a');
+  poly([x - 34, GROUND - 64, x + 34, GROUND - 64, x, GROUND - 90], '#6b4a36');
+  poly([x - 30, GROUND - 72, x + 30, GROUND - 72, x, GROUND - 92], C.ink);
+  rect(x - 1, GROUND - 64, 2, 16, '#2a1c1c'); rect(x - 6, GROUND - 48, 12, 9, '#8a5a3c');
+}
+function fence(x0, x1) {
+  rect(x0, GROUND - 22, x1 - x0, 3, '#6b4a36'); rect(x0, GROUND - 12, x1 - x0, 3, '#6b4a36');
+  for (let x = x0; x <= x1; x += 22) { rect(x, GROUND - 28, 5, 28, '#6b4a36'); rect(x - 1, GROUND - 31, 7, 3, C.ink); }
+}
+function woodGate(x) {
+  rect(x - 38, GROUND - 96, 8, 96, '#5a3a2a'); rect(x + 30, GROUND - 96, 8, 96, '#5a3a2a');
+  rect(x - 46, GROUND - 102, 92, 10, '#6b4a36'); rect(x - 48, GROUND - 106, 96, 5, C.ink);
+  rect(x - 32, GROUND - 86, 64, 15, '#8a5a3c');
+  text('WHITEWOOD', x, GROUND - 78, 8, C.ink);
+}
+function signpost(x, label) {
+  rect(x - 3, GROUND - 64, 6, 64, '#5a3a2a');
+  rect(x - 44, GROUND - 62, 88, 16, '#8a5a3c'); rect(x - 45, GROUND - 65, 90, 3, C.ink);
+  text(label, x, GROUND - 54, 8, C.ink);
+}
+function iceArch(x, s = 1) {
+  const top = GROUND - 150 * s;
+  rect(x - 14 * s, top, 28 * s, 150 * s, hexA(C.frost, 0.16 + 0.08 * Math.sin(time * 2)));
+  glow(x, GROUND - 70 * s, 90 * s, C.frost, 0.2);
+  rect(x - 30 * s, top, 16 * s, 150 * s, C.ice); rect(x + 14 * s, top, 16 * s, 150 * s, C.ice);
+  rect(x - 28 * s, top, 4 * s, 150 * s, C.ink); rect(x + 16 * s, top, 4 * s, 150 * s, C.ink);
+  ctx.strokeStyle = C.ice; ctx.lineWidth = 14 * s;
+  ctx.beginPath(); ctx.arc(x, top, 22 * s, Math.PI, 0); ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    const a = time * 0.7 + i * 1.05;
+    rect(x + Math.cos(a) * 30 * s, GROUND - 80 * s + Math.sin(a * 1.3) * 60 * s, 2, 2, C.ink);
+  }
+}
+function bellShape(x, y, s = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  poly([-10, 0, 10, 0, 20, 30, -20, 30], '#4a8fd0');
+  ellipse(0, 1, 10, 7, '#4a8fd0');
+  poly([-5, 2, -1, 2, -6, 28, -12, 28], C.frost);
+  rect(-22, 28, 44, 5, C.frost);
+  ellipse(0, 36, 4, 4, '#2a2060');
+  ctx.restore();
+}
+function oak(x, base, s = 1, bell = true) {
+  glow(x, base - 200 * s, 150 * s, C.frost, 0.14);
+  ctx.strokeStyle = C.ice; ctx.lineCap = 'round';
+  const branches = [[-90, -225, 10], [85, -235, 10], [-45, -270, 7], [40, -280, 7], [0, -300, 6], [-120, -195, 6], [120, -200, 6]];
+  for (const [bx, by, lw] of branches) {
+    ctx.lineWidth = lw * s; ctx.beginPath();
+    ctx.moveTo(x, base - 140 * s);
+    ctx.quadraticCurveTo(x + bx * 0.3 * s, base + by * 0.75 * s, x + bx * s, base + by * s);
+    ctx.stroke();
+  }
+  rect(x - 12 * s, base - 150 * s, 24 * s, 150 * s, C.ice);
+  rect(x - 6 * s, base - 150 * s, 5 * s, 150 * s, C.ink);
+  poly([x - 26 * s, base, x + 26 * s, base, x + 12 * s, base - 20 * s, x - 12 * s, base - 20 * s], C.ice);
+  if (bell) {
+    const hx = x + 55 * s, hy = base - 222 * s;
+    glow(hx, hy + 45 * s, 60 * s, C.frost, 0.25);
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.sin(time * 1.6) * 0.12);
+    rect(-1, 0, 2, 24 * s, '#c9c5da');
+    bellShape(0, 24 * s, s);
+    ctx.restore();
+  }
+}
+function aurora() {
+  ctx.lineWidth = 18; ctx.lineCap = 'round';
+  for (let b = 0; b < 3; b++) {
+    ctx.strokeStyle = hexA(b % 2 ? C.violet : C.frost, 0.1);
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 16) {
+      const y = 46 + b * 20 + Math.sin(x * 0.012 + time * 0.5 + b * 1.7) * 16;
+      x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+function wolfEyes(x, y, i) {
+  if (Math.sin(time * 0.9 + i * 2.1) < -0.5) return;     // they blink
+  glow(x + 5, y + 1, 12, C.gold, 0.25);
+  rect(x, y, 3, 2, C.gold); rect(x + 8, y, 3, 2, C.gold);
+}
+
+/* ---------------------------------------------------------------------
+   STEP 4: PLACES. Each area is a wide strip with a background painter
+   and a list of things you can walk up to. "act" runs when you press ↑.
+   --------------------------------------------------------------------- */
+function drawTowerRoom() {
+  rect(0, 0, W, GROUND, '#342a70');
+  ctx.fillStyle = '#2a2060';                                                     // stone blocks
+  for (let r = 0; r * 22 < GROUND; r++) for (let c = -1; c * 44 < W; c++) ctx.fillRect(c * 44 + (r % 2 ? 22 : 0), r * 22, 42, 20);
+  rect(0, GROUND, W, H - GROUND, '#3b2a2a');
+  for (let y = GROUND + 12; y < H; y += 14) rect(0, y, W, 2, '#2e1f22');
+  ellipse(320, GROUND + 18, 150, 12, '#5a33a8');                                  // rug
+  // window with the snowy night outside
+  rect(176, 70, 88, 110, '#4a3f7a');
+  ctx.save(); ctx.beginPath(); ctx.rect(184, 78, 72, 94); ctx.clip();
+  rect(184, 78, 72, 94, C.night); stars(0, 0);
+  snowfall(25, 30, 0, 184, 256);
+  ctx.restore();
+  rect(218, 78, 4, 94, '#4a3f7a'); rect(184, 122, 72, 4, '#4a3f7a');
+  // the hearth
+  rect(250, 170, 140, GROUND - 170, '#4a3f7a');
+  rect(240, 160, 160, 12, '#5b4f8f');
+  rect(272, 206, 96, GROUND - 206, '#0f0a26');
+  const lit = !flags.has('spark');
+  for (let k = 0; k < 4; k++) {
+    const fx = 290 + k * 20, fh = 30 + (k % 2) * 14;
+    poly([fx - 9, GROUND - 4, fx + 9, GROUND - 4, fx + 2, GROUND - 4 - fh], lit ? (k % 2 ? C.gold : '#d9803a') : '#6d6590');
+  }
+  rect(280, 222, 80, GROUND - 222, hexA(C.frost, 0.35));                           // the ice block
+  rect(284, 226, 3, GROUND - 234, hexA(C.ink, 0.6)); rect(290, 226, 20, 3, hexA(C.ink, 0.6));
+  if (lit) { const p = 0.6 + 0.4 * Math.sin(time * 4); glow(320, 262, 20, C.gold, 0.5 * p); rect(318, 260, 4, 4, C.gold); }
+  // bookshelf
+  rect(430, 150, 76, GROUND - 150, '#5a3a2a');
+  const spines = [C.violet, '#d9803a', C.frost, '#e0445a', C.gold, '#4a8fd0'];
+  for (let s = 0; s < 4; s++) {
+    rect(434, 176 + s * 32, 68, 3, '#3b2620');
+    for (let b = 0; b < 8; b++) rect(436 + b * 8, 154 + s * 32, 6, 22 - (hash(b + s * 9) * 6 | 0), spines[(b + s) % spines.length]);
+  }
+  // door and stairs
+  rect(44, GROUND - 78, 52, 78, '#4a3f7a');
+  rect(50, GROUND - 72, 40, 72, '#6b4a36');
+  for (let x = 58; x < 90; x += 10) rect(x, GROUND - 72, 2, 72, '#5a3a2a');
+  rect(80, GROUND - 38, 4, 4, C.gold);
+  for (let i = 0; i < 9; i++) { rect(540 + i * 14, GROUND - (i + 1) * 16, W, 16, '#4a3f7a'); rect(540 + i * 14, GROUND - (i + 1) * 16, W, 3, '#5b4f8f'); }
+}
+
+function drawObservatory() {
+  rect(0, 0, W, GROUND, '#231a52');
+  ctx.strokeStyle = '#3a2d78'; ctx.lineWidth = 3;
+  for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(320 + i * 110, GROUND); ctx.quadraticCurveTo(320 + i * 60, 0, 320, -40); ctx.stroke(); }
+  // big round window looking over the Whitewood
+  ctx.save(); ctx.beginPath(); ctx.arc(530, 120, 86, 0, Math.PI * 2); ctx.clip();
+  rect(430, 20, 200, 200, C.night); stars(0, 0);
+  moon(580, 70, 10);
+  pineRow(0, 0, 200, 50, 14, '#1a1446', 3, 0.3);
+  const p = 0.6 + 0.4 * Math.sin(time * 2);
+  glow(505, 176, 30, C.frost, 0.7 * p); rect(503, 174, 4, 4, C.ink);             // the blue light
+  ctx.restore();
+  ctx.strokeStyle = '#4a3f7a'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(530, 120, 88, 0, Math.PI * 2); ctx.stroke();
+  rect(0, GROUND, W, H - GROUND, '#3b2a2a');
+  for (let y = GROUND + 12; y < H; y += 14) rect(0, y, W, 2, '#2e1f22');
+  // stairs down, with a railing
+  rect(80, GROUND - 2, 64, 6, '#0f0a26');
+  rect(80, GROUND - 36, 4, 36, '#6b4a36'); rect(140, GROUND - 36, 4, 36, '#6b4a36'); rect(80, GROUND - 36, 64, 4, '#6b4a36');
+  // table with star charts
+  rect(220, GROUND - 40, 90, 6, '#6b4a36'); rect(226, GROUND - 34, 5, 34, '#5a3a2a'); rect(300, GROUND - 34, 5, 34, '#5a3a2a');
+  if (!flags.has('map')) { rect(236, GROUND - 46, 40, 6, C.ink); for (let i = 0; i < 5; i++) rect(240 + i * 7, GROUND - 45, 2, 2, '#4a8fd0'); }
+  // brass telescope aimed at the window
+  ctx.strokeStyle = '#c9a14a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(410, GROUND); ctx.lineTo(430, GROUND - 44); ctx.lineTo(450, GROUND); ctx.moveTo(430, GROUND - 44); ctx.lineTo(430, GROUND); ctx.stroke();
+  ctx.save(); ctx.translate(430, GROUND - 48); ctx.rotate(-0.6);
+  rect(-30, -7, 96, 14, '#c9a14a'); rect(-30, -7, 96, 3, '#ffe08a');
+  rect(10, -8, 6, 16, '#8a6a2a'); rect(50, -9, 16, 18, '#8a6a2a'); rect(-38, -4, 10, 8, '#8a6a2a');
+  ctx.restore();
+}
+
+function drawVillage(camX) {
+  sky('#120c30', '#2d2266');
+  stars(camX);
+  moon(520 - camX * 0.05, 58, 16);
+  range(camX, 0.12, GROUND - 70, 110, 80, '#2a2163', 3, true);
+  pineRow(camX, 0.35, GROUND - 14, 70, 34, '#1f1850', 5, 0.3);
+  ground(camX, '#c4cfee');
+  world(camX, () => {
+    towerOutside(160);
+    house(360, 170, 110, '#6b4a36', '#5a33a8', { sign: true });
+    lamp(640);
+    house(690, 140, 96, '#5b4a6e', '#3a2d78');
+    lamp(870);
+    house(905, 150, 112, '#6b4a36', '#7c4ddb');
+    well(1150);
+    house(1240, 150, 100, '#4f3f66', '#5a33a8');
+    lamp(1430);
+    fence(1450, 1560);
+    woodGate(1625);
+    pine(1530, GROUND + 2, 130, '#221a55', 0.7);
+    pine(1720, GROUND + 2, 160, '#221a55', 0.7);
+  });
+}
+
+function drawForest(camX) {
+  sky('#0c0826', '#1f1850');
+  stars(camX);
+  moon(150 - camX * 0.05, 50, 11);
+  pineRow(camX, 0.12, GROUND - 50, 90, 34, '#18123f', 11, 0.2);
+  pineRow(camX, 0.3, GROUND - 24, 120, 50, '#1f1850', 12, 0.3);
+  pineRow(camX, 0.55, GROUND - 6, 150, 64, '#2a2163', 13, 0.45);
+  ground(camX, '#b9c5e8');
+  world(camX, () => {
+    signpost(70, '← HOLLOWMERE');
+    ellipse(810, GROUND + 12, 120, 12, hexA(C.frost, 0.55));                      // frozen stream
+    rect(740, GROUND + 9, 30, 2, hexA(C.ink, 0.7)); rect(830, GROUND + 14, 40, 2, hexA(C.ink, 0.7));
+    signpost(1250, 'HEART OF THE WOOD →');
+    iceArch(1680, 1);
+    for (const x of [230, 420, 600, 1000, 1140, 1420, 1560, 1790]) pine(x, GROUND + 4, 170 + hash(x) * 60, '#2f2770', 0.7);
+  });
+}
+
+function drawLost(camX) {
+  sky('#07051a', '#120c30');
+  pineRow(camX, 0.2, GROUND - 30, 120, 40, '#0d0a28', 21, 0.15);
+  pineRow(camX, 0.5, GROUND - 10, 150, 55, '#141036', 22, 0.2);
+  ground(camX, '#5d668c');
+  world(camX, () => {
+    for (const x of [150, 330, 520, 700, 880, 1060, 1240]) pine(x, GROUND + 4, 190, '#0b0822', 0.25);
+  });
+}
+function lostDarkness(camX) {                    // only the light of your staff reaches
+  const px = player.x - camX, py = GROUND - 30;
+  const g = ctx.createRadialGradient(px, py, 40, px, py, 240);
+  g.addColorStop(0, 'rgba(5, 3, 15, 0)'); g.addColorStop(1, 'rgba(5, 3, 15, 0.92)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 12; i++) {                 // more eyes the deeper you go
+    const wx = 380 + i * 85 + hash(i) * 40;
+    if (wx > player.x + 520) continue;
+    wolfEyes(wx - camX, GROUND - 40 - hash(i + 3) * 110, i);
+  }
+}
+
+function drawClearing(camX, o = {}) {
+  sky('#0b0a2e', '#262268');
+  stars(camX);
+  aurora();
+  range(camX, 0.1, GROUND - 60, 70, 70, '#1c1850', 9, true);
+  pineRow(camX, 0.3, GROUND - 10, 90, 36, '#1f1a55', 31, 0.4);
+  ground(camX, '#d0daf3');
+  world(camX, () => {
+    if (!o.noArch) iceArch(70, 0.6);
+    oak(o.oakX ?? 600, GROUND, o.s ?? 1, o.bell !== false);
+  });
+}
+
+// Which ending was reached, by what you carried when you got there.
+const AREAS = {
+  tower: {
+    name: 'HOLLOWMERE TOWER', w: 640, draw: drawTowerRoom,
+    objs: [
+      { x: 70, label: 'Go outside', act: () => travel('village', 160) },
+      { x: 320, label: 'Look at the frozen hearth', act: () => openDialog(flags.has('spark') ? 'hearthDone' : 'hearth') },
+      { x: 468, label: 'Read your spellbooks', act: () => openDialog('books') },
+      { x: 585, label: 'Climb to the observatory', act: () => travel('observatory', 112) },
     ],
-  },
-  fire: {
-    place: 'HOLLOWMERE TOWER', title: 'The Frozen Fire',
-    text: `You kneel by the hearth. Deep inside the ice, one tiny spark is still moving, beating like a heart.
-
-You breathe on the ice. It cracks, and the spark floats up into your palm. It is warm, the only warm thing left in the world.`,
-    gives: 'spark', note: 'You carry the LAST SPARK.',
-    choices: [{ label: 'Tuck it in your robe and stand up', to: 'start' }],
   },
   observatory: {
-    place: 'THE OBSERVATORY', title: 'Stars Under Snow',
-    text: `At the top of the tower your old brass telescope is crusted with frost. You wipe it clean and look out.
-
-Deep in the Whitewood, at the very centre, something glows a cold, bright blue. You sketch the paths to it on the back of an old star chart.`,
-    gives: 'map', note: 'You carry a STAR CHART of the Whitewood.',
-    choices: [{ label: 'Roll up the chart and climb back down', to: 'start' }],
+    name: 'THE OBSERVATORY', w: 640, draw: drawObservatory,
+    objs: [
+      { x: 112, label: 'Go back down', act: () => travel('tower', 585) },
+      { x: 265, label: 'Look at the star charts', act: () => openDialog(flags.has('map') ? 'chartsDone' : 'charts') },
+      { x: 440, label: 'Look through the telescope', act: () => openDialog('telescope') },
+    ],
   },
   village: {
-    place: 'HOLLOWMERE VILLAGE', title: 'Snowed In',
-    text: `The villagers huddle around candles that give no heat. A small girl in a red scarf tugs your sleeve.
-
-<span class="speaker">MIRA:</span> "It started when the bell rang in the forest. Grandma says there used to be a winter festival, with songs for the Winter Queen. But nobody has held it for years."
-
-She pulls her scarf tight. "Can I come with you? I know the old songs."`,
-    choices: [
-      { label: '"Stay close to me, Mira."', to: 'villageYes', gives: 'mira' },
-      { label: '"It\'s too dangerous. Stay here, where it\'s safe."', to: 'start' },
+    name: 'HOLLOWMERE VILLAGE', w: 1700, draw: drawVillage, outdoor: true,
+    objs: [
+      { x: 160, label: 'Enter your tower', act: () => travel('tower', 70) },
+      { x: 578, npc: 'baker', label: 'Talk to Tomm the baker', act: () => openDialog(flags.has('spark') ? 'bakerSpark' : 'baker') },
+      { x: 762, npc: 'grandma', label: 'Talk to Grandma Else', act: () => openDialog(flags.has('mira') ? 'grandmaMira' : 'grandma') },
+      { x: 1100, npc: 'mira', label: 'Talk to Mira', hide: () => flags.has('mira'), act: () => openDialog('mira') },
+      { x: 1625, label: 'Take the path into the Whitewood', act: () => travel('forest', 110) },
     ],
-  },
-  villageYes: {
-    place: 'HOLLOWMERE VILLAGE', title: 'A Small Companion',
-    text: `Mira grins and grabs a lantern that isn't lit. "For when we find the fire again," she says.
-
-Her grandmother watches from a doorway, and nods at you.`,
-    note: 'MIRA walks with you.',
-    choices: [{ label: 'Walk back towards the tower road', to: 'start' }],
   },
   forest: {
-    place: 'THE WHITEWOOD', title: 'Between the Trees',
-    text: `Snow falls without a sound. Every tree looks the same, and the path splits three ways, then five, then more than you can count.
-
-Somewhere ahead, something whimpers.`,
-    choices: [
-      { label: 'Follow the star chart to the blue light', to: 'bellApproach', needs: 'map' },
-      { label: 'Follow the whimpering', to: 'fox' },
-      { label: 'Pick a path and hope', to: 'lost' },
+    name: 'THE WHITEWOOD', w: 1800, draw: drawForest, outdoor: true,
+    objs: [
+      { x: 70, label: 'Walk back to the village', act: () => travel('village', 1580) },
+      { x: 810, npc: 'fox', label: 'Look at the white fox', hide: () => flags.has('fox'), act: () => openDialog('fox') },
+      { x: 1250, label: 'Read the signpost', act: () => openDialog('sign') },
+      { x: 1680, label: 'Step through the Frost Gate', act: frostGate },
     ],
-  },
-  fox: {
-    place: 'THE WHITEWOOD', title: 'The White Fox',
-    text: `A small white fox is stuck, its back paw frozen into the ice of a stream. It watches you with bright silver eyes and does not run.`,
-    choices: [
-      { label: 'Melt the ice with your staff', to: 'foxFree', gives: 'fox' },
-      { label: 'Leave it. You have no time.', to: 'lost' },
-    ],
-  },
-  foxFree: {
-    place: 'THE WHITEWOOD', title: 'A Guide',
-    text: `The ice hisses and lets go. The fox shakes out its paw, looks at you for a long moment, then trots ahead and waits.
-
-It knows the way.`,
-    note: 'The WHITE FOX leads you.',
-    choices: [{ label: 'Follow the fox', to: 'bellApproach' }],
   },
   lost: {
-    place: 'THE WHITEWOOD', title: 'Lost',
-    text: `You walk for hours. Your footprints fill with snow behind you. The light of your staff grows dimmer.
-
-Far away, wolves begin to howl.`,
-    choices: [
-      { label: 'Walk towards the howling. Wolves live near open ground.', to: 'endLost' },
-      { label: 'Turn back and follow your fading footprints', to: 'forestAgain' },
+    name: 'DEEP IN THE WHITEWOOD', w: 1400, draw: drawLost, over: lostDarkness, outdoor: true,
+    objs: [
+      { x: 70, label: 'Go back towards the Frost Gate', act: () => travel('forest', 1620) },
+      { x: 1330, label: 'Follow the howling', act: () => openDialog('howling') },
     ],
   },
-  forestAgain: {
-    place: 'THE WHITEWOOD', title: 'Back at the Fork',
-    text: `Somehow you find the fork again, shivering. The whimpering is still there, weaker now.`,
-    choices: [
-      { label: 'Follow the star chart to the blue light', to: 'bellApproach', needs: 'map' },
-      { label: 'Follow the whimpering', to: 'fox' },
+  clearing: {
+    name: 'HEART OF THE WHITEWOOD', w: 900, draw: drawClearing, outdoor: true,
+    objs: [
+      { x: 70, label: 'Go back through the Frost Gate', act: () => travel('forest', 1620) },
+      { x: 520, npc: 'queen', label: 'Speak to the Winter Queen', act: () => openDialog('queen') },
     ],
-  },
-  bellApproach: {
-    place: 'HEART OF THE WHITEWOOD', title: 'The Winter Bell',
-    text: `In a clearing stands an oak made entirely of ice. From its branches hangs a great blue bell. It rings once, and a hundred new snowflakes fall.
-
-Beneath it sits a tall, pale woman in a gown of frost. She does not look cruel. She looks tired, and very sad.
-
-<span class="speaker">THE WINTER QUEEN:</span> "Another visitor. Have you come to stop me, wizard?"`,
-    choices: [
-      { label: 'Raise your staff and shatter the bell', to: 'endShatter' },
-      { label: '"Why do you keep ringing it?"', to: 'queenTalk' },
-      { label: 'Grab the rope and ring it yourself', to: 'endWhite' },
-    ],
-  },
-  queenTalk: {
-    place: 'HEART OF THE WHITEWOOD', title: 'The Queen\'s Story',
-    text: `<span class="speaker">THE WINTER QUEEN:</span> "Once, Hollowmere sang for me each winter. They lit fires, danced in the snow, thanked me for the quiet season. Then they forgot.
-
-When no one remembers you, you fade. So I ring the bell, and winter grows, and at least they cannot forget me now."
-
-She looks at her pale hands. "I am so cold, wizard."`,
-    choices: [
-      { label: 'Mira steps forward and starts to sing', to: 'endFestival', needs: 'mira' },
-      { label: 'Offer her the last spark', to: 'endSeasons', needs: 'spark' },
-      { label: '"Rest. I will keep winter for you."', to: 'endKeeper' },
-      { label: 'Shatter the bell while she isn\'t looking', to: 'endShatter' },
-    ],
-  },
-
-  /* ---------- endings ---------- */
-  endFestival: {
-    ending: 'The First Festival', mood: 'warm',
-    text: `Mira's voice is small and shaky, then brave. It's an old song about snow that sleeps and fields that wake.
-
-The Queen's eyes fill with frost-bright tears. The bell falls silent. By morning the snow has stopped, and a line of villagers with lanterns comes up the forest path, singing.
-
-Every winter after that, Hollowmere holds a festival. The Queen always comes.`,
-  },
-  endSeasons: {
-    ending: 'Two Seasons', mood: 'warm',
-    text: `You open your hand. The spark drifts to her and settles over her heart. For the first time in a hundred days, she smiles.
-
-<span class="speaker">THE WINTER QUEEN:</span> "Half the year is mine. Half the year belongs to the sun. That is fair."
-
-The ice oak drips. Far away, your hearth fire flickers back to life.`,
-  },
-  endKeeper: {
-    ending: 'The Frozen Wizard', mood: 'bittersweet',
-    text: `You take her cold hand. The frost climbs your sleeves, your beard, the tip of your hat. It doesn't hurt.
-
-The Queen fades gently into the snow, finally able to rest. Winter softens and turns into a proper season again.
-
-In Hollowmere they tell stories now about the Frozen Wizard of the Whitewood, who keeps the quiet months. The children leave you songs.`,
-  },
-  endShatter: {
-    ending: 'Shattered Spring', mood: 'sad',
-    text: `Your staff strikes the bell. It bursts into a million blue shards, and the Queen cries out once, then is gone like breath on glass.
-
-The snow stops. Spring comes, fast and green.
-
-But every year after, the winters are thin and grey, and on quiet nights you swear you hear a bell, very far away.`,
-  },
-  endWhite: {
-    ending: 'Endless White', mood: 'sad',
-    text: `You pull the rope. The bell's voice rolls out over the land, and the snow falls thicker than ever.
-
-<span class="speaker">THE WINTER QUEEN:</span> "Thank you, wizard. Now they will never forget."
-
-Hollowmere sleeps under the white for a hundred years more.`,
-  },
-  endLost: {
-    ending: 'Lost in the White', mood: 'sad',
-    text: `The howling leads to open ground, and to the wolves. You hold them off with the last light of your staff, backing away into the trees.
-
-When the light finally goes out, only the snow is left, falling softly over a wizard's hat.`,
   },
 };
 
-const ENDINGS = Object.values(STORY).filter(s => s.ending).map(s => s.ending);
-const ITEM_NAMES = { spark: 'SPARK', map: 'CHART', mira: 'MIRA', fox: 'FOX' };
+function frostGate() {
+  if (flags.has('fox')) { toast('The fox leads you through the maze of trees'); travel('clearing', 120); }
+  else if (flags.has('map')) { toast('You follow your star chart'); travel('clearing', 120); }
+  else openDialog('frostLost');
+}
 
 /* ---------------------------------------------------------------------
-   STATE. Flags collected this run, plus endings found across all runs.
+   STEP 5: THE STORY. Dialog nodes with pages and choices.
+   A choice can need an item, give one, open another node, travel,
+   or finish the story with an ending.
    --------------------------------------------------------------------- */
-let flags = new Set();
+const SPEAKERS = {
+  mira: { name: 'MIRA', color: '#ff8fa0', spr: 'mira' },
+  grandma: { name: 'GRANDMA ELSE', color: C.violet, spr: 'grandma' },
+  baker: { name: 'TOMM THE BAKER', color: '#ffb46e', spr: 'baker' },
+  queen: { name: 'THE WINTER QUEEN', color: C.frost, spr: 'queen' },
+};
+const DIALOG = {
+  wake: { pages: [
+    'You wake on the cold stone floor of your tower. Your hearth fire is frozen solid: the flames stand still, trapped in clear ice.',
+    'Outside, it has not stopped snowing on Hollowmere for one hundred days. Your staff hums softly. Something is wrong with winter.',
+    '← → to walk.  ↑ or Space to look at things, talk to people and go through doors.'] },
+  hearth: { pages: ['The flames stand still inside the ice. But deep inside, one tiny spark is still moving, beating like a heart.'],
+    choices: [{ label: 'Breathe on the ice', give: 'spark', to: 'hearthTake' }, { label: 'Leave it' }] },
+  hearthTake: { pages: ['The ice cracks. The spark floats up into your palm, warm as a sleeping bird. It is the only warm thing left in the world.'] },
+  hearthDone: { pages: ['Just cold, cracked ice now. The spark is safe in your robe.'] },
+  books: { pages: ['Your old spellbooks. One lies open at a page you don\'t remember reading:',
+    '"The Winter Queen keeps the quiet season. Those who are forgotten grow cold, and the cold grows with them."'] },
+  telescope: { pages: ['You wipe the frost off your telescope and look out over the Whitewood.',
+    'At the very heart of the forest, something glows a cold, bright blue. Something is waiting there.'] },
+  charts: { pages: ['Your star charts. You sketch the forest paths to the blue light on the back of one, and roll it up.'], give: 'map' },
+  chartsDone: { pages: ['The rest of your charts. The one you need is in your pocket.'] },
+  baker: { speaker: 'baker', pages: ['My oven won\'t light. Not one crumb of warmth in all of Hollowmere.',
+    'They say your tower hearth froze first, wizard. If any fire is left in this world, I\'d bet it\'s up there.'] },
+  bakerSpark: { speaker: 'baker', pages: ['Is that... a spark? Don\'t you dare put it in my oven. Something out there needs it more than my bread does.'] },
+  grandma: { speaker: 'grandma', pages: ['When I was a girl we sang to the Winter Queen every year. We lit fires and danced in the snow to thank her for the quiet season.',
+    'Then everyone got busy. We forgot. I wonder if she\'s lonely, out there in the wood.'] },
+  grandmaMira: { speaker: 'grandma', pages: ['Keep my Mira warm, wizard. And listen when she sings. She knows all the old songs.'] },
+  mira: { speaker: 'mira', pages: ['It started when the bell rang in the forest. I heard it! Grandma says there used to be a festival, with songs for the Winter Queen.',
+    'Can I come with you? I know all the old songs.'],
+    choices: [{ label: '"Stay close to me, Mira."', give: 'mira', to: 'miraYes' }, { label: '"It\'s too dangerous. Stay here."', to: 'miraNo' }] },
+  miraYes: { speaker: 'mira', pages: ['Yes! I\'ll bring my lantern. For when we find the fire again.'] },
+  miraNo: { speaker: 'mira', pages: ['...Okay. I\'ll be right here by the well if you change your mind.'] },
+  fox: { pages: ['A small white fox is stuck in the frozen stream, one paw trapped in the ice. It watches you with bright silver eyes and does not run.'],
+    choices: [{ label: 'Melt the ice with your staff', give: 'fox', to: 'foxFree' }, { label: 'Leave it. There\'s no time.' }] },
+  foxFree: { pages: ['The ice hisses and lets go. The fox shakes out its paw, looks at you for a long moment, then trots to your side.', 'It seems to know the way.'] },
+  sign: { pages: ['A frosted signpost. Someone has scratched a warning underneath:', '"Never go past the Frost Gate without a guide."'] },
+  frostLost: { pages: ['Beyond the Frost Gate the paths twist and split, again and again. Without a guide, you could wander forever.'],
+    choices: [{ label: 'Go through anyway', go: ['lost', 110] }, { label: 'Turn back' }] },
+  howling: { pages: ['The howling is very close now. Your staff flickers. Wolves live near open ground... don\'t they?'],
+    choices: [{ label: 'Keep walking towards the howling', end: 'lost' }, { label: 'Turn back' }] },
+  queen: { speaker: 'queen', pages: ['Another visitor. Each time the bell rings, a hundred new snowflakes fall. Have you come to stop me, wizard?'],
+    choices: [
+      { label: 'Raise your staff and shatter the bell', end: 'shatter' },
+      { label: '"Why do you keep ringing it?"', to: 'queenWhy' },
+      { label: 'Take the rope and ring it yourself', end: 'white' }] },
+  queenWhy: { speaker: 'queen', pages: [
+    'Once, Hollowmere sang for me each winter. They lit fires and danced, and thanked me for the quiet season. Then they forgot.',
+    'When no one remembers you, you fade. So I ring the bell. At least now they cannot forget me.',
+    'I am so cold, wizard.'],
+    choices: [
+      { label: 'Mira steps forward and starts to sing', needs: 'mira', end: 'festival' },
+      { label: 'Offer her the last spark', needs: 'spark', end: 'seasons' },
+      { label: '"Rest. I will keep winter for you."', end: 'keeper' },
+      { label: 'Shatter the bell while she isn\'t looking', end: 'shatter' }] },
+};
+const ITEM = { spark: 'SPARK', map: 'CHART', mira: 'MIRA', fox: 'FOX' };
+const GOT = { spark: 'You got THE LAST SPARK', map: 'You got a STAR CHART', mira: 'MIRA joined you', fox: 'The WHITE FOX joined you' };
+
+/* ---------------------------------------------------------------------
+   STEP 6: GAME STATE. Where you are, what you carry, who follows you.
+   --------------------------------------------------------------------- */
+let state = 'title', area = 'tower', time = 0;
+let flags = new Set(), followers = [];
+const player = { x: 250, face: 1, walking: false, walkT: 0 };
+let cam = 0, dlg = null, fade = null, toastMsg = null, banner = null, ending = null, endFlags = new Set();
 let found = new Set();
 try { found = new Set(JSON.parse(localStorage.getItem('frozen-tower-endings') || '[]')); } catch {}
-function saveFound() {
-  try { localStorage.setItem('frozen-tower-endings', JSON.stringify([...found])); } catch {}
-}
+function saveFound() { try { localStorage.setItem('frozen-tower-endings', JSON.stringify([...found])); } catch {} }
 
-const sceneEl = document.getElementById('scene');
-const itemsEl = document.getElementById('items');
-const countEl = document.getElementById('endingsCount');
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const wizardSrc = 'brand/frozenwizard-logo.svg';
-
-function updateHud() {
-  countEl.textContent = `ENDINGS ${found.size}/${ENDINGS.length}`;
-  itemsEl.textContent = [...flags].map(f => ITEM_NAMES[f]).join(' · ');
-}
-
-/* ---------------------------------------------------------------------
-   TYPEWRITER. Reveals the scene text a character at a time.
-   Space / click finishes it instantly. HTML tags are revealed whole.
-   --------------------------------------------------------------------- */
-let typing = null;
-
-function typeInto(el, html, done) {
-  if (reduceMotion) { el.innerHTML = html; done(); return; }
-  const parts = html.split(/(<[^>]+>)/);    // keep tags intact
-  let out = '', pi = 0, ci = 0;
-  const step = () => {
-    let n = 2;                               // characters per tick
-    while (n > 0 && pi < parts.length) {
-      const p = parts[pi];
-      if (p.startsWith('<')) { out += p; pi++; continue; }
-      if (ci < p.length) { out += p[ci++]; n--; } else { pi++; ci = 0; }
-    }
-    el.innerHTML = out + (pi < parts.length ? '<span aria-hidden="true">▌</span>' : '');
-    if (pi < parts.length) typing = { timer: setTimeout(step, 18), finish };
-    else { typing = null; done(); }
-  };
-  const finish = () => { clearTimeout(typing.timer); typing = null; el.innerHTML = html; done(); };
-  step();
-}
-function skipTyping() {
-  if (!typing) return false;
-  typing.finish();
-  return true;
-}
-
-/* ---------------------------------------------------------------------
-   SCENES. Build the DOM for a scene, then reveal the choices.
-   --------------------------------------------------------------------- */
-let choiceButtons = [], selected = 0;
-
-function go(id) {
-  const s = STORY[id];
-  if (s.gives) flags.add(s.gives);
-  if (s.ending) return showEnding(s);
-  updateHud();
-
-  sceneEl.className = 'scene';
-  sceneEl.innerHTML = `
-    <div class="scene-head">
-      <img class="portrait" src="${wizardSrc}" alt="">
-      <div><p class="place">${s.place}</p><h2>${s.title}</h2></div>
-    </div>
-    <p class="text"></p>
-    <p class="note"></p>
-    <ul class="choices"></ul>
-    <p class="hint">Space or click to skip</p>`;
-  const textEl = sceneEl.querySelector('.text');
-  typeInto(textEl, s.text, () => showChoices(s));
-}
-
-function showChoices(s) {
-  sceneEl.querySelector('.note').textContent = s.note || '';
-  sceneEl.querySelector('.hint').textContent = '';
-  const list = sceneEl.querySelector('.choices');
-  const visible = s.choices.filter(c => !(c.hideIf && flags.has(c.hideIf)));
-  list.innerHTML = '';
-  choiceButtons = visible.map((c, i) => {
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    const locked = c.needs && !flags.has(c.needs);
-    b.innerHTML = `<span class="n">${i + 1}</span><span>${c.label}</span>` +
-                  (c.needs ? `<span class="lock">${locked ? 'needs ' : ''}${ITEM_NAMES[c.needs]}</span>` : '');
-    b.disabled = locked;
-    if (locked) b.style.opacity = 0.45;
-    b.addEventListener('click', () => choose(c));
-    b.addEventListener('mouseenter', () => select(i));
-    li.appendChild(b); list.appendChild(li);
-    return b;
-  });
-  select(choiceButtons.findIndex(b => !b.disabled));
-}
-
-function select(i) {
-  if (i < 0 || !choiceButtons[i] || choiceButtons[i].disabled) return;
-  selected = i;
-  choiceButtons.forEach((b, j) => b.classList.toggle('sel', j === i));
-}
-function moveSelection(dir) {
-  for (let k = 1; k <= choiceButtons.length; k++) {
-    const i = (selected + dir * k + choiceButtons.length * 2) % choiceButtons.length;
-    if (!choiceButtons[i].disabled) return select(i);
+function give(item) {
+  if (flags.has(item)) return;
+  flags.add(item);
+  toast(GOT[item]);
+  chime(880); setTimeout(() => chime(1320), 90);
+  if (item === 'mira' || item === 'fox') {
+    const from = AREAS[area].objs.find(o => o.npc === item);
+    followers.push({ who: item, x: from ? from.x : player.x, face: 1, walking: false });
   }
 }
-function choose(c) {
-  if (c.gives) flags.add(c.gives);
-  chime(c.gives ? 880 : 520);
-  go(c.to);
+function toast(msg) { toastMsg = { msg, t: 2.6 }; }
+
+function travel(to, x) {
+  if (fade) return;
+  thud();
+  fade = { t: 0, dir: 1, then: () => {
+    area = to; player.x = x;
+    followers.forEach((f, i) => { f.x = x - player.face * (34 + i * 30); });
+    banner = { text: AREAS[to].name, t: 2.2 };
+  } };
 }
 
-function showEnding(s) {
-  const isNew = !found.has(s.ending);
-  found.add(s.ending); saveFound();
-  flags = new Set();
-  updateHud();
-  chime(s.mood === 'sad' ? 196 : 660, 0.4);
+function targetCam() { return clamp(player.x - W / 2, 0, AREAS[area].w - W); }
 
-  sceneEl.className = `scene ending ${s.mood === 'sad' ? 'sad' : 'warm'}`;
-  sceneEl.innerHTML = `
-    <div class="scene-head">
-      <img class="portrait" src="${wizardSrc}" alt="">
-      <div><p class="place">ENDING ${ENDINGS.indexOf(s.ending) + 1} OF ${ENDINGS.length}${isNew ? ' · NEW' : ''}</p><h2>${s.ending}</h2></div>
-    </div>
-    <p class="text"></p>
-    <ul class="endings-list" hidden>${ENDINGS.map(e => `<li class="${found.has(e) ? 'found' : ''}">${found.has(e) ? e : '? ? ?'}</li>`).join('')}</ul>
-    <ul class="choices"></ul>
-    <p class="hint">Space or click to skip</p>`;
-  typeInto(sceneEl.querySelector('.text'), s.text, () => {
-    sceneEl.querySelector('.endings-list').hidden = false;
-    sceneEl.querySelector('.hint').textContent = found.size === ENDINGS.length
-      ? 'You found every ending. Thank you for playing!'
-      : 'Different choices lead to different endings.';
-    showChoices({ choices: [{ label: 'Begin the story again', to: 'start' }] });
-  });
+function nearby() {
+  let best = null, bd = 34;
+  for (const o of AREAS[area].objs) {
+    if (o.hide && o.hide()) continue;
+    const d = Math.abs(o.x - player.x);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
 }
+function interact() { const o = nearby(); if (o) o.act(); }
 
 /* ---------------------------------------------------------------------
-   INPUT. Number keys pick directly; arrows move; Space/Enter confirms.
+   STEP 7: DIALOG BOX. Text types itself out; Space finishes a page,
+   then moves on. On the last page the choices appear.
    --------------------------------------------------------------------- */
-addEventListener('keydown', e => {
-  if (e.key === 'm' || e.key === 'M') { muted = !muted; return; }
-  if ([' ', 'Enter', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
-  unlockAudio();
-  if (skipTyping()) return;
-  if (e.key === 'ArrowDown') moveSelection(1);
-  else if (e.key === 'ArrowUp') moveSelection(-1);
-  else if (e.key === ' ' || e.key === 'Enter') choiceButtons[selected]?.click();
-  else if (/^[1-9]$/.test(e.key)) choiceButtons[+e.key - 1]?.click();
-});
-sceneEl.addEventListener('click', e => {
-  unlockAudio();
-  if (!e.target.closest('button')) skipTyping();
-});
+const DLG_FONT = '13px "IBM Plex Mono", monospace';
+let choiceRects = [];
+
+function wrap(str, maxW) {
+  const out = [];
+  for (const para of str.split('\n')) {
+    let line = '';
+    for (const word of para.split(' ')) {
+      const t = line ? line + ' ' + word : word;
+      if (ctx.measureText(t).width > maxW && line) { out.push(line); line = word; } else line = t;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function openDialog(id) {
+  const n = DIALOG[id];
+  dlg = { id, n, page: 0, chars: 0, sel: 0, gave: false };
+  layoutPage();
+}
+function layoutPage() {
+  ctx.font = DLG_FONT;
+  dlg.lines = wrap(dlg.n.pages[dlg.page], W - 20 - 32 - (dlg.n.speaker ? 72 : 0));
+  dlg.len = dlg.lines.join('').length;
+}
+const pageDone = () => dlg.chars >= dlg.len;
+const lastPage = () => dlg.page === dlg.n.pages.length - 1;
+const choicesUp = () => dlg && lastPage() && pageDone() && dlg.n.choices;
+
+function advance() {
+  if (!pageDone()) { dlg.chars = Infinity; return; }
+  if (!lastPage()) { dlg.page++; dlg.chars = 0; layoutPage(); return; }
+  if (dlg.n.choices) { pick(dlg.sel); return; }
+  if (dlg.n.give) give(dlg.n.give);
+  dlg = null;
+}
+function pick(i) {
+  const c = dlg.n.choices[i];
+  if (!c) return;
+  if (c.needs && !flags.has(c.needs)) { chime(160, 0.15); return; }
+  chime(520);
+  dlg = null;
+  if (c.give) give(c.give);
+  if (c.to) openDialog(c.to);
+  else if (c.go) travel(...c.go);
+  else if (c.end) startEnding(c.end);
+}
+function moveSel(d) {
+  const n = dlg.n.choices.length;
+  dlg.sel = (dlg.sel + d + n) % n;
+}
+
+function drawDialog() {
+  const n = dlg.n, sp = n.speaker && SPEAKERS[n.speaker];
+  const choices = choicesUp() ? n.choices : [];
+  const tx0 = 26 + (sp ? 72 : 0);
+  const h = Math.max(sp ? 88 : 0, 16 + (sp ? 18 : 0) + dlg.lines.length * 18 + (choices.length ? 8 + choices.length * 22 : 18));
+  const x = 10, w = W - 20, y = H - 10 - h;
+  roundBox(x, y, w, h, 6, 'rgba(15, 10, 38, 0.93)', C.line);
+  let ty = y + 20;
+  if (sp) {
+    roundBox(x + 12, y + 12, 60, 64, 4, '#1a1240', C.line);
+    const s = spr(sp.spr), sc = Math.min(3, Math.floor(56 / s.height * 10) / 10);
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 13, y + 13, 58, 62); ctx.clip();
+    drawSprite(s, x + 42, y + 72, sc);
+    ctx.restore();
+    text(sp.name, tx0, ty, 10, sp.color, 'left');
+    ty += 18;
+  }
+  ctx.font = DLG_FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = C.ink;
+  let budget = dlg.chars;
+  for (const line of dlg.lines) {
+    if (budget > 0) ctx.fillText(line.slice(0, Math.floor(budget)), tx0, ty);
+    budget -= line.length; ty += 18;
+  }
+  choiceRects = [];
+  if (choices.length) {
+    ty += 4;
+    choices.forEach((c, i) => {
+      const locked = c.needs && !flags.has(c.needs), sel = i === dlg.sel;
+      const r = { x: tx0 - 8, y: ty - 10, w: x + w - tx0 - 6, h: 20 };
+      choiceRects.push(r);
+      if (sel) roundBox(r.x, r.y, r.w, r.h, 4, hexA(C.frost, 0.1), C.frost);
+      ctx.globalAlpha = locked ? 0.45 : 1;
+      text(`${i + 1}`, tx0, ty, 12, sel ? C.frost : C.muted, 'left', 'IBM Plex Mono');
+      text(c.label, tx0 + 18, ty, 13, C.ink, 'left', 'IBM Plex Mono');
+      if (c.needs) text(locked ? `needs ${ITEM[c.needs]}` : ITEM[c.needs], r.x + r.w - 8, ty, 11, C.frost, 'right', 'IBM Plex Mono');
+      ctx.globalAlpha = 1;
+      ty += 22;
+    });
+  } else if (pageDone() && Math.sin(time * 6) > 0) {
+    text('▼', x + w - 18, y + h - 14, 12, C.frost, 'center', 'IBM Plex Mono');
+  }
+}
 
 /* ---------------------------------------------------------------------
-   POLISH. A soft chime on each choice, and snow behind the page.
+   STEP 8: ENDINGS. Each one is its own little animated picture.
+   --------------------------------------------------------------------- */
+const ENDINGS = {
+  festival: { title: 'The First Festival', mood: 'warm', draw: endFestival,
+    text: 'Mira sings, shaky at first, then brave. The bell falls silent. By morning the snow has stopped, and the whole village climbs the path with lanterns. Every winter after, Hollowmere holds a festival, and the Queen always comes.' },
+  seasons: { title: 'Two Seasons', mood: 'warm', draw: endSeasons,
+    text: 'The spark drifts to the Queen and settles over her heart. For the first time in a hundred days, she smiles. "Half the year is mine, and half belongs to the sun. That is fair." Far away, your hearth fire flickers back to life.' },
+  keeper: { title: 'The Frozen Wizard', mood: 'bittersweet', draw: endKeeper,
+    text: 'You take her cold hand. Frost climbs your sleeves and beard, and it doesn\'t hurt. The Queen finally rests. Now Hollowmere tells stories of the Frozen Wizard of the Whitewood, who keeps the quiet months. The children bring you songs.' },
+  shatter: { title: 'Shattered Spring', mood: 'sad', draw: endShatter,
+    text: 'The bell bursts into a thousand blue shards, and the Queen is gone like breath on glass. Spring comes, fast and green. But the winters after are thin and grey, and on quiet nights you still hear a bell, very far away.' },
+  white: { title: 'Endless White', mood: 'sad', draw: endWhite,
+    text: 'The bell\'s voice rolls over the land and the snow falls thicker than ever. "Thank you, wizard," says the Queen. "Now they will never forget." Hollowmere sleeps under the white for a hundred years more.' },
+  lost: { title: 'Lost in the White', mood: 'sad', draw: endLost,
+    text: 'The howling leads to open ground, and to the wolves. You hold them back with the last light of your staff. When it goes out, only the snow is left, falling softly over a wizard\'s hat.' },
+};
+const ENDING_IDS = Object.keys(ENDINGS);
+
+function startEnding(id) {
+  const e = ENDINGS[id];
+  thud();
+  fade = { t: 0, dir: 1, speed: 1.5, then: () => {
+    endFlags = new Set(flags);
+    const isNew = !found.has(e.title);
+    found.add(e.title); saveFound();
+    ctx.font = '12px "IBM Plex Mono", monospace';
+    ending = { id, chars: 0, lines: wrap(e.text, W - 48), isNew };
+    ending.len = ending.lines.join('').length;
+    state = 'ending';
+    chime(e.mood === 'sad' ? 196 : 660, 0.5);
+  } };
+}
+
+function notes(x, y, n, color) {                 // little music notes drifting up
+  for (let i = 0; i < n; i++) {
+    const ph = (time * 0.5 + i / n) % 1;
+    ctx.globalAlpha = 1 - ph;
+    text('♪', x + Math.sin(ph * 6 + i) * 14, y - ph * 70, 14, color, 'center', 'IBM Plex Mono');
+  }
+  ctx.globalAlpha = 1;
+}
+
+function endFestival() {
+  drawVillage(700);
+  rect(0, 0, W, H, 'rgba(255, 160, 70, 0.10)');
+  ctx.strokeStyle = '#2a1c1c'; ctx.lineWidth = 1; ctx.beginPath();
+  const rope = x => 34 + Math.sin(x / W * Math.PI) * 26;
+  for (let x = 0; x <= W; x += 8) x ? ctx.lineTo(x, rope(x)) : ctx.moveTo(x, rope(x));
+  ctx.stroke();
+  for (let i = 1; i < 12; i++) {                 // lanterns along the rope
+    const x = i * W / 12, y = rope(x) + 4, sw = Math.sin(time * 2 + i) * 2;
+    glow(x + sw, y + 6, 20, C.gold, 0.4);
+    rect(x - 4 + sw, y, 8, 11, i % 2 ? C.gold : '#ff8f6e');
+  }
+  const fx = 320;                                 // the bonfire
+  glow(fx, GROUND - 20, 160, '#ffb347', 0.35);
+  rect(fx - 26, GROUND - 6, 52, 6, '#5a3a2a');
+  for (let k = 0; k < 5; k++) {
+    const fh = 26 + Math.sin(time * 9 + k * 1.7) * 7 + (k === 2 ? 18 : 0), ox = (k - 2) * 9;
+    poly([fx + ox - 10, GROUND - 4, fx + ox + 10, GROUND - 4, fx + ox + Math.sin(time * 7 + k) * 3, GROUND - 4 - fh], k % 2 ? C.gold : '#ff8f3e');
+  }
+  for (let i = 0; i < 12; i++) {
+    const ph = (time * 0.5 + hash(i)) % 1;
+    rect(fx + Math.sin(ph * 8 + i) * 22, GROUND - 30 - ph * 120, 2, 2, hexA(C.gold, 1 - ph));
+  }
+  drawSprite(spr('grandma'), 170, GROUND, 3);
+  drawSprite(spr('baker'), 226, GROUND, 3);
+  drawWizard(400, GROUND, -1);
+  drawSprite(spr('mira'), 452, GROUND - Math.abs(Math.sin(time * 5)) * 8, 3);
+  if (endFlags.has('fox')) drawSprite(spr('fox'), 492, GROUND, 3, true);
+  drawSprite(spr('queen'), 548, GROUND, 3);
+  notes(452, GROUND - 50, 4, C.gold);
+  snowfall(20, 20, 0, 0, W, 0.4);
+}
+
+function leafyTree(x, s) {
+  rect(x - 5 * s, GROUND - 60 * s, 10 * s, 60 * s, '#6b4a36');
+  for (const [dx, dy, r] of [[0, -70, 26], [-20, -58, 20], [20, -58, 20], [0, -90, 18]]) ellipse(x + dx * s, GROUND + dy * s, r * s, r * s, '#5fae5a');
+  ellipse(x - 8 * s, GROUND - 80 * s, 8 * s, 6 * s, '#8fd48a');
+}
+function endSeasons() {
+  sky('#120c30', '#2d2266'); stars(0, 0);
+  ground(0, '#c4cfee');
+  pine(50, GROUND + 2, 110, '#221a55', 0.8); pine(130, GROUND + 2, 80, '#221a55', 0.8); pine(210, GROUND + 2, 100, '#221a55', 0.8);
+  oak(320, GROUND, 0.55, false);
+  snowfall(40, 30, 0, 0, 320);
+  ctx.save();                                    // spring, through a gently waving border
+  ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(320, 0);
+  for (let y = 0; y <= H; y += 8) ctx.lineTo(320 + Math.sin(y * 0.05 + time) * 6, y);
+  ctx.lineTo(W, H); ctx.closePath(); ctx.clip();
+  sky('#5b9bd5', '#cdeaff');
+  glow(560, 50, 70, '#fff3b0', 0.6); ellipse(560, 50, 20, 20, '#ffe07a');
+  ground(0, '#79c267');
+  leafyTree(320, 1.2); leafyTree(450, 0.8); leafyTree(600, 1);
+  for (let i = 0; i < 24; i++) rect(330 + hash(i) * 300, GROUND + 2 + hash(i + 40) * 8, 3, 3, ['#ff8fb8', C.gold, C.ink][i % 3]);
+  ctx.restore();
+  drawSprite(spr('queen'), 280, GROUND, 3);
+  const p = 0.6 + 0.3 * Math.sin(time * 3);
+  glow(280, GROUND - 38, 26, C.gold, p); rect(278, GROUND - 40, 4, 4, C.gold);
+  drawWizard(370, GROUND, -1);
+}
+
+function endKeeper() {
+  drawClearing(300, { bell: false, s: 0.6, oakX: 560, noArch: true });
+  rect(290, GROUND - 16, 60, 16, C.ice); rect(290, GROUND - 16, 60, 3, C.ink);
+  glow(320, GROUND - 56, 70, C.frost, 0.35);
+  drawWizard(320, GROUND - 16, 1, wizardIce, 3);
+  for (let i = 0; i < 10; i++) {
+    const a = time * 0.8 + i * 0.628;
+    rect(320 + Math.cos(a) * 56, GROUND - 56 + Math.sin(a) * 24, 2, 2, C.ink);
+  }
+  drawSprite(spr('queen'), 160, GROUND - 10 - (time * 6) % 40, 3, false, 0.22);   // resting at last
+  drawSprite(spr('mira'), 450, GROUND, 3, true);
+  drawSprite(spr('grandma'), 500, GROUND, 3, true);
+  notes(430, GROUND - 46, 3, C.frost);
+  snowfall(30, 20, 0);
+}
+
+function endShatter() {
+  sky('#7d8799', '#c3ccd3');
+  glow(480, 50, 70, '#ffffff', 0.35);
+  ctx.globalAlpha = 0.12 + 0.06 * Math.sin(time * 1.3); bellShape(320, 26, 1.4); ctx.globalAlpha = 1;
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 2; k++) {                  // a bell you can almost still hear
+    const r = (time * 20 + k * 40) % 80;
+    ctx.strokeStyle = hexA(C.ink, 0.25 * (1 - r / 80));
+    ctx.beginPath(); ctx.arc(320, 50, 20 + r, 0, Math.PI * 2); ctx.stroke();
+  }
+  range(0, 0, GROUND - 30, 50, 70, '#8a9a8a', 4, false);
+  range(0, 0, GROUND - 6, 30, 50, '#9fb29a', 8, false);
+  ground(0, '#86a872');
+  ellipse(120, GROUND + 4, 40, 4, hexA(C.ink, 0.6)); ellipse(540, GROUND + 6, 50, 4, hexA(C.ink, 0.6));
+  for (let i = 0; i < 22; i++) {                 // bell shards glinting in the grass
+    const sx = 360 + hash(i) * 150, sy = GROUND - 2 + hash(i + 50) * 8, s = 3 + hash(i + 9) * 5;
+    poly([sx, sy, sx + s, sy - s * 0.6, sx + s * 0.4, sy + 2], i % 2 ? C.frost : '#4a8fd0');
+    if (Math.sin(time * 3 + i * 1.3) > 0.9) rect(sx + 1, sy - 2, 2, 2, '#fff');
+  }
+  for (let i = 0; i < 10; i++) rect(40 + hash(i + 70) * 260, GROUND + 2 + hash(i + 80) * 6, 2, 2, '#c7b3d9');
+  drawWizard(300, GROUND, 1);
+}
+
+function endWhite() {
+  sky('#cfdcee', '#eef4fb');
+  drawSprite(spr('queen'), 320, GROUND + 10, 8, false, 0.14);
+  bellShape(320, 20, 0.8);
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 3; k++) {
+    const r = (time * 40 + k * 50) % 150;
+    ctx.strokeStyle = hexA('#4a8fd0', 0.4 * (1 - r / 150));
+    ctx.beginPath(); ctx.arc(320, 40, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  for (const [x, c] of [[90, '#5a33a8'], [220, '#7c4ddb'], [440, '#5a33a8'], [570, '#3a2d78']]) {
+    rect(x + 14, GROUND - 32, 8, 22, '#4a3f7a');
+    poly([x - 40, GROUND - 2, x + 40, GROUND - 2, x, GROUND - 34], c);
+  }
+  ctx.fillStyle = '#f4f8ff'; ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 20) ctx.lineTo(x, GROUND - 10 + Math.sin(x * 0.04) * 5);
+  ctx.lineTo(W, H); ctx.fill();
+  poly([330, GROUND - 8, 348, GROUND - 8, 341, GROUND - 26], '#7c4ddb');       // just the tip of a hat
+  rect(328, GROUND - 10, 22, 3, C.frost);
+  snowfall(150, 70, 0, 0, W, 0.9);
+}
+
+function endLost() {
+  drawLost(600);
+  poly([300, GROUND + 2, 346, GROUND + 2, 334, GROUND - 28], '#7c4ddb');
+  poly([322, GROUND + 2, 346, GROUND + 2, 334, GROUND - 28], '#5a33a8');
+  rect(296, GROUND - 2, 54, 5, C.frost);
+  ellipse(312, GROUND - 1, 14, 4, C.ink);
+  ctx.strokeStyle = '#a0714a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(362, GROUND + 3); ctx.lineTo(424, GROUND - 5); ctx.stroke();
+  glow(426, GROUND - 6, 18, C.frost, 0.15 + 0.1 * Math.sin(time * 2));
+  const g = ctx.createRadialGradient(320, GROUND - 20, 50, 320, GROUND - 20, 340);
+  g.addColorStop(0, 'rgba(5, 3, 15, 0)'); g.addColorStop(1, 'rgba(5, 3, 15, 0.9)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 10; i++) {
+    const ex = 30 + hash(i + 20) * 580;
+    if (Math.abs(ex - 330) < 70) continue;
+    wolfEyes(ex, 60 + hash(i + 30) * (GROUND - 90), i);
+  }
+  snowfall(60, 30, 0);
+}
+
+function drawEnding() {
+  const e = ENDINGS[ending.id];
+  GROUND = END_GROUND;
+  e.draw();
+  GROUND = PLAY_GROUND;
+  const top = 200;
+  const g = ctx.createLinearGradient(0, top, 0, top + 16);
+  g.addColorStop(0, 'rgba(15, 10, 38, 0)'); g.addColorStop(1, 'rgba(15, 10, 38, 0.96)');
+  ctx.fillStyle = g; ctx.fillRect(0, top, W, H - top);
+  const color = e.mood === 'sad' ? C.rose : e.mood === 'warm' ? C.gold : C.frost;
+  text(`ENDING ${ENDING_IDS.indexOf(ending.id) + 1} OF ${ENDING_IDS.length}${ending.isNew ? '  ·  NEW' : ''}`, 24, top + 22, 10, C.violet, 'left');
+  text(e.title.toUpperCase(), 24, top + 44, 20, color, 'left');
+  ctx.font = '12px "IBM Plex Mono", monospace'; ctx.textAlign = 'left'; ctx.fillStyle = C.ink;
+  let budget = ending.chars, y = top + 70;
+  for (const line of ending.lines) {
+    if (budget > 0) ctx.fillText(line.slice(0, Math.floor(budget)), 24, y);
+    budget -= line.length; y += 17;
+  }
+  if (ending.chars >= ending.len) {
+    ENDING_IDS.forEach((id, i) => rect(24 + i * 14, H - 16, 10, 6, found.has(ENDINGS[id].title) ? C.frost : C.line));
+    text(`${found.size}/${ENDING_IDS.length} ENDINGS FOUND`, 24 + ENDING_IDS.length * 14 + 6, H - 13, 9, C.muted, 'left');
+    text(found.size === ENDING_IDS.length ? 'You found them all! Space: play again' : 'Space or tap: play again', W - 24, H - 13, 11, C.ink, 'right', 'IBM Plex Mono');
+  }
+}
+
+/* ---------------------------------------------------------------------
+   STEP 9: SCENES. title -> play -> ending -> title ...
+   --------------------------------------------------------------------- */
+function startGame() {
+  flags = new Set(); followers = [];
+  area = 'tower'; player.x = 250; player.face = 1;
+  state = 'play';
+  openDialog('wake');
+}
+function endingAction() {
+  if (ending.chars < ending.len) { ending.chars = Infinity; return; }
+  state = 'title'; ending = null;
+  flags = new Set(); followers = []; area = 'tower'; player.x = 250;
+}
+
+/* ---------------------------------------------------------------------
+   STEP 10: INPUT. Keyboard, plus tap zones on touch screens:
+   left third walks left, right third walks right, middle acts.
+   --------------------------------------------------------------------- */
+const keys = {};
+let touchDir = 0;
+addEventListener('keydown', e => {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
+  if (e.repeat) return;
+  keys[e.key] = true;
+  unlockAudio();
+  if (e.key === 'm' || e.key === 'M') { muted = !muted; return; }
+  if (fade) return;
+  const act = [' ', 'Enter', 'ArrowUp', 'w', 'W'].includes(e.key);
+  if (state === 'title') { if (act) startGame(); return; }
+  if (state === 'ending') { if (act) endingAction(); return; }
+  if (dlg) {
+    if (choicesUp()) {
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') return moveSel(-1);
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') return moveSel(1);
+      if (/^[1-9]$/.test(e.key)) { dlg.sel = +e.key - 1; return pick(dlg.sel); }
+    }
+    if (e.key === ' ' || e.key === 'Enter') advance();
+    return;
+  }
+  if (act) interact();
+});
+addEventListener('keyup', e => { keys[e.key] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; touchDir = 0; });
+
+function toWorld(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
+canvas.addEventListener('pointerdown', e => {
+  canvas.focus(); unlockAudio();
+  if (fade) return;
+  const p = toWorld(e);
+  if (state === 'title') return startGame();
+  if (state === 'ending') return endingAction();
+  if (dlg) {
+    const hit = choicesUp() ? choiceRects.findIndex(r => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) : -1;
+    if (hit >= 0) { dlg.sel = hit; pick(hit); } else advance();
+    return;
+  }
+  if (p.x < W / 3) touchDir = -1;
+  else if (p.x > W * 2 / 3) touchDir = 1;
+  else interact();
+});
+addEventListener('pointerup', () => { touchDir = 0; });
+addEventListener('pointercancel', () => { touchDir = 0; });
+
+/* ---------------------------------------------------------------------
+   STEP 11: SOUND. Tiny synth blips, only after the first key or tap.
    --------------------------------------------------------------------- */
 let ac = null, muted = false;
 function unlockAudio() { if (!ac) { try { ac = new AudioContext(); } catch {} } }
-function chime(freq, dur = 0.18) {
+function chime(freq, dur = 0.18, type = 'triangle', vol = 0.05) {
   if (muted || !ac) return;
   const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(freq, t);
-  g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
 }
+const thud = () => chime(110, 0.2, 'sine', 0.08);
 
-const snowCanvas = document.getElementById('snow');
-const sctx = snowCanvas.getContext('2d');
-const flakes = Array.from({ length: reduceMotion ? 0 : 60 }, () => ({ x: Math.random(), y: Math.random(), r: 0.6 + Math.random() * 1.6, v: 0.02 + Math.random() * 0.04, d: Math.random() * 6 }));
-function snowFrame(t) {
-  const w = snowCanvas.clientWidth, h = snowCanvas.clientHeight, dpr = devicePixelRatio || 1;
-  if (snowCanvas.width !== w * dpr || snowCanvas.height !== h * dpr) { snowCanvas.width = w * dpr; snowCanvas.height = h * dpr; }
-  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  sctx.clearRect(0, 0, w, h);
-  sctx.fillStyle = 'rgba(234, 246, 255, 0.35)';
-  for (const f of flakes) {
-    f.y += f.v / 60; if (f.y > 1) { f.y = 0; f.x = Math.random(); }
-    sctx.fillRect(f.x * w + Math.sin(t / 1000 + f.d) * 6, f.y * h, f.r, f.r);
+/* ---------------------------------------------------------------------
+   UPDATE and DRAW, then the loop.
+   --------------------------------------------------------------------- */
+const WALK = 120;
+
+function update(dt) {
+  time += dt;
+  if (fade) {
+    fade.t += dt * 4 * (fade.speed ? 1 / fade.speed : 1) * fade.dir;
+    if (fade.dir === 1 && fade.t >= 1) { fade.t = 1; fade.then(); fade.dir = -1; }
+    else if (fade.dir === -1 && fade.t <= 0) fade = null;
   }
-  requestAnimationFrame(snowFrame);
-}
-if (flakes.length) requestAnimationFrame(snowFrame);
+  if (toastMsg && (toastMsg.t -= dt) <= 0) toastMsg = null;
+  if (banner && (banner.t -= dt) <= 0) banner = null;
+  if (state === 'ending') { ending.chars += dt * 45; return; }
+  if (state !== 'play') return;
 
-go('start');
+  if (dlg) { dlg.chars += dt * 55; if (lastPage() && pageDone() && dlg.n.give && !dlg.gave) { dlg.gave = true; give(dlg.n.give); } }
+  let dir = 0;
+  if (!dlg && !fade) {
+    if (keys.ArrowLeft || keys.a || keys.A) dir -= 1;
+    if (keys.ArrowRight || keys.d || keys.D) dir += 1;
+    if (!dir) dir = touchDir;
+  }
+  player.walking = dir !== 0;
+  if (dir) {
+    player.face = dir;
+    player.x = clamp(player.x + dir * WALK * dt, 24, AREAS[area].w - 24);
+    const before = Math.floor(player.walkT * 3.5);
+    player.walkT += dt;
+    if (Math.floor(player.walkT * 3.5) !== before) chime(AREAS[area].outdoor ? 90 : 70, 0.05, 'sine', 0.03);  // footsteps
+  }
+  followers.forEach((f, i) => {
+    const tx = player.x - player.face * (34 + i * 30), d = tx - f.x;
+    f.walking = Math.abs(d) > 3;
+    if (f.walking) { f.x += d * Math.min(1, dt * 3); f.face = Math.sign(d); }
+    else f.face = player.x >= f.x ? 1 : -1;
+    f.x = clamp(f.x, 16, AREAS[area].w - 16);
+  });
+  cam = targetCam();
+}
+
+function drawPlay() {
+  const A = AREAS[area];
+  A.draw(cam);
+  world(cam, () => {
+    for (const o of A.objs) {                    // people, facing you
+      if (!o.npc || (o.hide && o.hide())) continue;
+      const bob = Math.sin(time * 2 + o.x) > 0.6 ? 1 : 0;
+      drawSprite(spr(o.npc), o.x, GROUND - bob, 3, o.npc === 'fox' ? player.x < o.x : false);
+    }
+    for (const f of followers) {
+      const hop = f.walking ? Math.abs(Math.sin(time * 10)) * 2 : 0;
+      drawSprite(spr(f.who), f.x, GROUND - hop, 3, f.who === 'fox' ? f.face < 0 : false);
+    }
+    const bob = player.walking ? Math.abs(Math.sin(player.walkT * 10)) * 2 : 0;
+    drawWizard(player.x, GROUND - bob, player.face);
+  });
+  if (A.over) A.over(cam);
+  if (A.outdoor) snowfall(60, 30, cam);
+
+  const o = !dlg && !fade && nearby();           // "↑ Talk to Mira" hint
+  if (o) {
+    const bx = o.x - cam, by = GROUND - (o.npc === 'queen' ? 84 : o.npc ? 64 : 96);
+    const label = `↑  ${o.label}`;
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    const w = ctx.measureText(label).width + 16, x = clamp(bx - w / 2, 6, W - w - 6);
+    roundBox(x, by - 11 - Math.abs(Math.sin(time * 3)) * 2, w, 22, 4, 'rgba(15, 10, 38, 0.88)', C.frost);
+    text(label, x + w / 2, by - Math.abs(Math.sin(time * 3)) * 2, 11, C.ink, 'center', 'IBM Plex Mono');
+  }
+
+  rect(0, 0, W, 22, 'rgba(15, 10, 38, 0.72)');   // HUD
+  text(A.name, 10, 11, 10, C.violet, 'left');
+  text([...flags].map(f => ITEM[f]).join('  ·  '), W / 2, 11, 10, C.frost);
+  text(`ENDINGS ${found.size}/${ENDING_IDS.length}`, W - 10, 11, 10, C.muted, 'right');
+  if (banner && !dlg) {
+    ctx.globalAlpha = Math.min(1, banner.t);
+    text(banner.text, W / 2, 64, 18, C.ink);
+    ctx.globalAlpha = 1;
+  }
+  if (toastMsg) {
+    ctx.globalAlpha = Math.min(1, toastMsg.t * 2);
+    ctx.font = '12px "Silkscreen", monospace';
+    const w = ctx.measureText(toastMsg.msg).width + 24;
+    roundBox(W / 2 - w / 2, 32, w, 22, 4, 'rgba(15, 10, 38, 0.9)', C.gold);
+    text(toastMsg.msg, W / 2, 43, 12, C.gold);
+    ctx.globalAlpha = 1;
+  }
+  if (dlg) drawDialog();
+}
+
+function drawTitle() {
+  drawTowerRoom();
+  rect(0, 0, W, H, 'rgba(15, 10, 38, 0.82)');
+  drawWizard(320, 128, 1, wizardC, 3);
+  text('FROZENWIZARD PRESENTS', W / 2, 150, 11, C.violet);
+  text('THE FROZEN TOWER', W / 2, 184, 32, C.frost);
+  text('A short winter tale. Walk, talk, choose.', W / 2, 220, 13, C.muted, 'center', 'IBM Plex Mono');
+  text(`Endings found: ${found.size} of ${ENDING_IDS.length}`, W / 2, 244, 13, C.muted, 'center', 'IBM Plex Mono');
+  if (Math.sin(time * 4) > -0.3) text('Press Space or tap to begin', W / 2, 290, 14, C.ink, 'center', 'IBM Plex Mono');
+  snowfall(40, 25, 0, 0, W, 0.4);
+}
+
+function draw() {
+  ctx.imageSmoothingEnabled = false;
+  if (state === 'title') drawTitle();
+  else if (state === 'ending') drawEnding();
+  else drawPlay();
+  if (fade) rect(0, 0, W, H, `rgba(8, 5, 24, ${clamp(fade.t, 0, 1)})`);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(1 / 30, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+document.fonts.ready.then(() => requestAnimationFrame(frame));
+canvas.focus();
 </script>
 </body>
 </html>
