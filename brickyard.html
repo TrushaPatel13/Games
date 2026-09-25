@@ -8,18 +8,19 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
-  /* Single-look arcade cabinet: deliberately one theme, colors set explicitly. */
+  /* FrozenWizard theme: shared by every FW game. One dark look, colors set explicitly. */
   :root {
     color-scheme: dark;
-    --bg: #0c2227;
-    --court: #10303a;
-    --line: #1f4a55;
-    --ink: #e6f2ef;
-    --muted: #8fb3ad;
-    --coral: #ff7a59;
-    --amber: #ffb547;
-    --mint: #6fd3a8;
-    --sky: #5fb4ff;
+    --bg: #1a1240;         /* indigo */
+    --court: #231a52;
+    --line: #3a2d78;
+    --ink: #eaf6ff;        /* ice white */
+    --muted: #a59cd0;
+    --violet: #b48cff;
+    --purple: #7c4ddb;
+    --blueviolet: #7a6cf0;
+    --frost: #8fd3ff;
+    --rose: #ff6fa8;       /* danger / game over */
   }
   html, body { height: 100%; }
   body {
@@ -45,8 +46,18 @@
     font: 700 22px/1 "Silkscreen", "IBM Plex Mono", monospace;
     letter-spacing: 0.04em;
     margin: 0;
-    color: var(--amber);
+    color: var(--frost);
   }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 40px; height: 40px; image-rendering: pixelated; }
+  .studio {
+    display: block;
+    font: 700 11px/1 "Silkscreen", "IBM Plex Mono", monospace;
+    letter-spacing: 0.08em;
+    color: var(--frost);
+    margin-bottom: 4px;
+  }
+  .studio span { color: var(--violet); }
   .keys { color: var(--muted); font-size: 12px; text-align: right; }
   kbd {
     font: inherit;
@@ -67,14 +78,17 @@
     touch-action: none;
     cursor: none;
   }
-  canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  canvas:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; }
   @media (max-width: 440px) { .keys { display: none; } }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Brickyard</h1>
+  <div class="brand">
+    <img class="logo" src="brand/frozenwizard-logo.svg" alt="FrozenWizard logo">
+    <div><span class="studio">FROZEN<span>WIZARD</span></span><h1>Brickyard</h1></div>
+  </div>
   <div class="keys"><kbd>←</kbd> <kbd>→</kbd> or mouse · <kbd>Space</kbd> launch / pause · <kbd>M</kbd> sound</div>
 </header>
 <canvas id="game" tabindex="0" aria-label="Breakout game. Use arrow keys or the mouse to move the paddle, Space to launch the ball."></canvas>
@@ -89,7 +103,8 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const COLORS = { court: css('--court'), line: css('--line'), ink: css('--ink'), muted: css('--muted'),
-                 coral: css('--coral'), amber: css('--amber'), mint: css('--mint'), sky: css('--sky') };
+                 violet: css('--violet'), purple: css('--purple'), blueviolet: css('--blueviolet'),
+                 frost: css('--frost'), rose: css('--rose') };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function resize() {
@@ -224,7 +239,7 @@ const LEVELS = [
 ];
 const COLS = 10, BRICK_H = 18, GAP = 4, TOP = 70;
 const BRICK_W = (W - GAP * (COLS + 1)) / COLS;
-const ROW_COLORS = () => [COLORS.coral, COLORS.amber, COLORS.mint, COLORS.sky];
+const ROW_COLORS = () => [COLORS.violet, COLORS.purple, COLORS.blueviolet, COLORS.frost];
 let bricks = [];
 
 function buildLevel(n) {
@@ -400,7 +415,7 @@ function draw() {
   // HUD
   text(`SCORE ${String(score).padStart(5, '0')}`, 12, HUD / 2, 14, COLORS.ink, 'left');
   text(`LV ${level}`, W / 2, HUD / 2, 14, COLORS.muted);
-  text('●'.repeat(Math.max(0, lives)), W - 12, HUD / 2, 14, COLORS.coral, 'right', 'IBM Plex Mono');
+  text('●'.repeat(Math.max(0, lives)), W - 12, HUD / 2, 14, COLORS.violet, 'right', 'IBM Plex Mono');
 
   // bricks: tougher bricks show their remaining hits as notches
   for (const b of bricks) {
@@ -423,12 +438,12 @@ function draw() {
 
   // paddle (squashes briefly on a hit)
   const pw = paddle.w * (1 + squash * 0.12), ph = paddle.h * (1 - squash * 0.3);
-  ctx.fillStyle = COLORS.ink;
+  ctx.fillStyle = COLORS.frost;
   roundRect(paddle.x - pw / 2, paddle.y - ph / 2, pw, ph, ph / 2);
 
   // ball
   if (state !== 'title') {
-    ctx.fillStyle = COLORS.amber;
+    ctx.fillStyle = COLORS.ink;
     ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
@@ -436,7 +451,11 @@ function draw() {
   drawOverlay();
 }
 
-function panel(title, lines, titleColor = COLORS.amber) {
+// Studio logo for the title screen (shared file in brand/)
+const logo = new Image();
+logo.src = 'brand/frozenwizard-logo.svg';
+
+function panel(title, lines, titleColor = COLORS.frost) {
   ctx.fillStyle = 'rgba(8, 26, 30, 0.82)';
   ctx.fillRect(0, HUD + 1, W, H - HUD - 1);
   text(title, W / 2, H / 2 - 50, 34, titleColor);
@@ -444,10 +463,14 @@ function panel(title, lines, titleColor = COLORS.amber) {
 }
 
 function drawOverlay() {
-  if (state === 'title') panel('BRICKYARD', [`Best ${best}`, 'Chain bricks between paddle hits for a combo bonus', '', 'Press Space or click to start']);
+  if (state === 'title') {
+    panel('BRICKYARD', [`Best ${best}`, 'Chain bricks between paddle hits for a combo bonus', '', 'Press Space or click to start']);
+    if (logo.complete && logo.naturalWidth) ctx.drawImage(logo, W / 2 - 48, H / 2 - 190, 96, 96);
+    text('FROZENWIZARD PRESENTS', W / 2, H / 2 - 84, 11, COLORS.violet);
+  }
   else if (state === 'paused') panel('PAUSED', ['', 'Press Space or click to resume']);
-  else if (state === 'clear') panel(`LEVEL ${level} CLEAR`, [`Score ${score}`, '', 'Press Space or click for the next level'], COLORS.mint);
-  else if (state === 'over') panel('GAME OVER', [`Score ${score}  ·  Best ${best}`, '', 'Press Space or click to play again'], COLORS.coral);
+  else if (state === 'clear') panel(`LEVEL ${level} CLEAR`, [`Score ${score}`, '', 'Press Space or click for the next level'], COLORS.violet);
+  else if (state === 'over') panel('GAME OVER', [`Score ${score}  ·  Best ${best}`, '', 'Press Space or click to play again'], COLORS.rose);
   else if (state === 'play' && ball.stuck) text('SPACE / CLICK TO LAUNCH', W / 2, H - 80, 12, COLORS.muted);
 }
 
